@@ -1,6 +1,6 @@
 # DOKUMENTATION TECHNIK
 
-Aktueller Stand: **v1.0.16** · Letzte Aktualisierung: **28. Juni 2026**
+Aktueller Stand: **v1.0.26** · Letzte Aktualisierung: **12. September 2026**
 
 ## Inhaltsverzeichnis
 
@@ -12,7 +12,7 @@ Aktueller Stand: **v1.0.16** · Letzte Aktualisierung: **28. Juni 2026**
 - [Besondere Laufzeitlogik](#besondere-laufzeitlogik)
 - [Logging](#logging)
 - [Betriebs- und Wartungshinweise](#betriebs--und-wartungshinweise)
-- [Release- und GitHub-Hinweise](#release--und-github-hinweise)
+- [Release-Prozess](#release-prozess)
 
 ## Projektüberblick
 
@@ -50,7 +50,8 @@ Zentrale Aufgaben:
 - `data/3. Nuera-Dateien/` – Download- und Entpackbereich für Nuera-Dateien
 - `data/4. Logs/` – Transcript-Ausgaben
 - `docs/` – kanonische Projektdokumentation
-- `release/`, `dist/`, `build/` – historische bzw. erzeugte Release-Artefakte
+- `release/` – aktuelles Release; ältere Artefakte liegen unter `release/_Archiv/`
+- `dist/`, `build/` – erzeugte Build-Artefakte
 
 ## Einstiegspunkt und Parameter
 
@@ -106,9 +107,10 @@ Unterstützte Parameter:
 
 ### COM-Fallback
 
-- Standardmäßig wird Word/Excel per COM geprüft und verwendet.
-- Wenn die COM-Prüfung fehlschlägt, wird automatisch in den Registry-Fallback gewechselt.
-- Mit `-RegistryOnly` kann dieser Modus direkt erzwungen werden.
+- Im Standardbetrieb werden Office-Einstellungen über Registry und Dateikopie gesetzt; Word/Excel-COM wird nicht gestartet.
+- Die Excel-Teilnehmerliste wird im Standardbetrieb mit `openpyxl` gelesen.
+- COM bleibt als optionaler Kompatibilitätsmodus über `-UseCom` verfügbar.
+- Mit `-RegistryOnly` kann der COM-freie Modus zusätzlich explizit erzwungen werden.
 
 ### Excel-/CSV-Fallback
 
@@ -118,9 +120,11 @@ Unterstützte Parameter:
 
 ### Nuera-Dateien
 
-- Es wird eine priorisierte Liste geprüft, aktuell beginnend mit `nuera2026_f.zip`.
-- Nach erfolgreichem Download wird das Archiv entpackt und der extrahierte Ordner auf den Desktop kopiert.
-- Der Download erfolgt direkt aus dem AkA-Bereich.
+- Es wird eine priorisierte Liste geprüft, aktuell beginnend mit `nuera2026_h.zip`.
+- Ein vorhandener lokaler Bestand wird wiederverwendet; nur bei fehlendem Bestand erfolgt ein Download.
+- Leere entpackte Ordner werden aus dem lokalen ZIP erneut aufgebaut.
+- Unter `data/3. Nuera-Dateien/` bleibt nur die aktuellste Variante erhalten.
+- Nach erfolgreichem Download wird der extrahierte Ordner auf den Desktop kopiert.
 
 ### Desktop-Bereitstellung
 
@@ -142,8 +146,8 @@ Unterstützte Parameter:
 - Beim Klick auf `AP1-Konfiguration starten` startet die GUI den PowerShell-Prozess im Hintergrund (ohne zusätzliches Konsolenfenster).
 - Der Fortschritt wird über bekannte Log-Marker aus `data/4. Logs` abgeleitet und im GUI-Fortschrittsbalken angezeigt.
 - Abschlusszustände:
-	- Erfolg: 100 %, grün, Text `Fertig`
-	- Fehler: 100 %, rot, Text `Fehler`
+  - Erfolg: 100 %, grün, Text `Fertig`
+  - Fehler: 100 %, rot, Text `Fehler`
 
 ## Logging
 
@@ -160,11 +164,50 @@ Unterstützte Parameter:
 - Historische Build- und Release-Artefakte im Repository sind nicht die kanonische Quellstruktur.
 - Die kanonische Projektdokumentation liegt unter `docs/`.
 
-## Release- und GitHub-Hinweise
+## Release-Prozess
 
-- Aktueller veröffentlichter Stand im Repository: `v1.0.16`
-- Changelog: `docs/CHANGELOG.md`
-- Release-Notizen: `release/RELEASE_NOTES_v1.0.16.md`
-- Der GitHub-Release wird über die EXE-Variante `AP1-Konfigurator-vX.Y.Z.zip` veröffentlicht.
-- Das EXE-Release enthält nur `AP1-Konfigurator.exe`, `data/`, `docs/` und `README.md`.
-- Für konsistente Releases sollten Anwender-, Technik-, Kurz- und Release-Prozess-Dokumentation vor dem Tagging aktualisiert werden.
+### Ziel und Artefakte
+
+Releases werden grundsätzlich als EXE-Variante veröffentlicht. Das Endanwender-Artefakt ist:
+
+- `release/AP1-Konfigurator-vX.Y.Z.zip`
+
+Der sichtbare Ordner `release/` enthält nur das aktuelle Release, die aktuelle Release-Note und `RELEASE_NOTES_TEMPLATE.md` liegt unter `src/`. Ältere versionierte Artefakte werden automatisch nach `release/_Archiv/` verschoben.
+
+### Versionierung und Build
+
+Die Version steht in `src/build_info.py`. Die Build-Pipeline übernimmt den Versionssprung, synchronisiert die Dokumentationsversionen, baut die EXE und erstellt die Release-Notes aus `src/RELEASE_NOTES_TEMPLATE.md`.
+
+```powershell
+./src/setup.ps1
+./src/build.ps1
+```
+
+Für einen Build ohne Versionssprung:
+
+```powershell
+./src/build.ps1 -NoVersionBump
+```
+
+### Release-Checkliste
+
+1. `README.md`, Anwender-, Technik- und Checklisten-Dokumentation aktualisieren.
+2. Buildumgebung mit `./src/setup.ps1` prüfen.
+3. EXE mit `./src/build.ps1` erstellen.
+4. `dist/AP1-Konfigurator.exe` und `release/AP1-Konfigurator-vX.Y.Z.zip` prüfen.
+5. Sicherstellen, dass das Release `data/`, `docs/` und `README.md` enthält.
+6. Prüfen, dass ältere Artefakte unter `release/_Archiv/` liegen.
+7. Optional über `./src/publish_release.ps1 -Version vX.Y.Z` auf GitHub veröffentlichen.
+
+### GitHub Actions und Veröffentlichung
+
+Der Workflow `.github/workflows/release.yml` baut bei Tag-Pushes `v*` automatisch die EXE-Variante und lädt das resultierende ZIP in den GitHub-Release hoch. Vor der Veröffentlichung müssen Tag, Release und ZIP-Asset geprüft werden.
+
+### Laufzeit- und Paketregeln
+
+- PowerShell-Startdateien und Module sind in der EXE eingebettet.
+- Beim Start werden sie nach `%LOCALAPPDATA%\AP1-Konfigurator\vX.Y.Z` kopiert.
+- `%LOCALAPPDATA%\AP1-Konfigurator\current` wird als aktuelle Arbeitskopie gepflegt.
+- Ältere lokale `v*`-Ordner werden beim Start bereinigt.
+- Das Release enthält nur `AP1-Konfigurator.exe`, `data/`, `docs/` und `README.md`.
+- Das ZIP ist flach aufgebaut und enthält keinen zusätzlichen Sammelordner.

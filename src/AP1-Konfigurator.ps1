@@ -7,7 +7,8 @@ param(
   [string]$CsvFallbackPath = '',
   [int]$MaxRows = 500,
   [switch]$Quiet,
-  [switch]$RegistryOnly
+  [switch]$RegistryOnly,
+  [switch]$UseCom
 )
 
 $script:AppVersion = '1.0.10'
@@ -63,8 +64,12 @@ try {
     Write-Warning "Konnte PersonalTemplates nicht setzen: $($_.Exception.Message)"
 }
 
-# Desktop per Shell-Objekt wirklich an Schnellzugriff anheften
-Add-DesktopToQuickAccess
+# Optionaler Komfortschritt; der stabile Standardbetrieb benoetigt kein Shell-COM.
+if ($UseCom) {
+  try { Add-DesktopToQuickAccess } catch { Write-Warning "Schnellzugriff konnte nicht per COM gesetzt werden: $($_.Exception.Message)" }
+} else {
+  Write-Info "Registry-only-Modus aktiv: Office-/Shell-COM wird nicht verwendet."
+}
 
 
 
@@ -129,21 +134,16 @@ function Set-OfficeRegistrySettings {
 
 function Set-DefaultSavePaths {
   param([string]$Path, [switch]$UseCom)
-  # Immer privaten Desktop erzwingen
-  $privateDesktop = Join-Path $env:USERPROFILE 'Desktop'
-  if (-not (Test-Path $privateDesktop)) {
-    try {
-      New-Item -ItemType Directory -Path $privateDesktop -Force | Out-Null
-      Write-Info "[DEBUG] Set-DefaultSavePaths: Privater Desktop wurde angelegt: $privateDesktop"
-    } catch {
-      Write-Info "[DEBUG] Set-DefaultSavePaths: Privater Desktop konnte nicht angelegt werden: $($_.Exception.Message)"
-    }
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    $Path = [Environment]::GetFolderPath('Desktop')
   }
-  if (Test-Path $privateDesktop) {
-    $Path = $privateDesktop
-    Write-Info "[DEBUG] Set-DefaultSavePaths: Erzwinge privaten Desktop: $Path"
-  } else {
-    Write-Info "[DEBUG] Set-DefaultSavePaths: Privater Desktop nicht gefunden, nutze Fallback: $Path"
+  if (-not (Test-Path $Path)) {
+    try {
+      New-Item -ItemType Directory -Path $Path -Force | Out-Null
+      Write-Info "[DEBUG] Set-DefaultSavePaths: Speicherordner wurde angelegt: $Path"
+    } catch {
+      Write-Info "[DEBUG] Set-DefaultSavePaths: Speicherordner konnte nicht angelegt werden: $($_.Exception.Message)"
+    }
   }
   $regWord   = ("HKCU:\Software\Microsoft\Office\$script:OfficeVersion\Word\Options" -replace "\\\\", "\\")
   $regExcel  = ("HKCU:\Software\Microsoft\Office\$script:OfficeVersion\Excel\Options" -replace "\\\\", "\\")
@@ -282,32 +282,39 @@ function Copy-ExcelTemplate {
 # Region: Ordnererzeugung & Desktop-Deployment
 # ============================================
 function New-CandidateFoldersFromExcel {
-  param([Parameter(Mandatory)] [string]$WorkbookPath, [int]$MaxRows = 500)
+  param([Parameter(Mandatory)] [string]$WorkbookPath, [int]$MaxRows = 500, [switch]$NoCom)
   $rootPath = Join-Path $script:ScriptRoot '2. Bei Bedarf anpassen\Ordner'
   New-EnsuredPath $rootPath
+  $currentUser = [Environment]::UserName.Trim()
+  Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
   $excel = $null; $wb = $null
   try {
+    if ($NoCom) { throw 'COM im Standardmodus deaktiviert' }
     $excel = New-Object -ComObject Excel.Application -ErrorAction Stop
     $excel.Visible = $false; $excel.DisplayAlerts = $false
     $wb = $excel.Workbooks.Open($WorkbookPath)
     $sheet = $wb.Sheets.Item(1)
     $used = $sheet.UsedRange
     $rowCount = [Math]::Min($used.Rows.Count, $MaxRows)
-    Write-Info "Erzeuge Ordnerstruktur aus Excel (max. $rowCount Zeilen)..."
+    Write-Info "Suche Benutzer '$currentUser' in Excel (max. $rowCount Zeilen)..."
     for ($r = 1; $r -le $rowCount; $r++) {
       $a = $sheet.Cells.Item($r,1).Text
       $b = $sheet.Cells.Item($r,2).Text
       if ([string]::IsNullOrWhiteSpace($a) -or [string]::IsNullOrWhiteSpace($b)) { continue }
+      if (-not [string]::Equals($a.Trim(), $currentUser, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
       $safeA = ($a -replace '[\\/:*?"<>|]', '_').Trim()
       $safeB = ($b -replace '[\\/:*?"<>|]', '_').Trim()
-      if ([string]::IsNullOrWhiteSpace($safeA) -or [string]::IsNullOrWhiteSpace($safeB)) { continue }
-      $path = Join-Path (Join-Path $rootPath $safeA) $safeB
+      if ([string]::IsNullOrWhiteSpace($safeB)) { continue }
+      $path = Join-Path $rootPath $safeB
       New-EnsuredPath $path
+      Write-Info "Benutzer '$currentUser' gefunden; Ordner '$safeB' wird bereitgestellt."
+      break
     }
     Write-Info "Ordner fuer Pruefungskandidaten wurden angelegt."
+    return $rootPath
   } catch {
-    throw
+    Write-Warning "Excel-COM-Lesezugriff fehlgeschlagen: $($_.Exception.Message) - nutze Python/pyopenxl-Fallback."
   } finally {
     if ($wb) { 
       try { $wb.Close($false) | Out-Null } catch {}
@@ -320,6 +327,75 @@ function New-CandidateFoldersFromExcel {
     Stop-NamedProcess EXCEL
   }
 
+  $pythonCommand = $null
+  foreach ($candidate in @('python', 'py')) {
+    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($cmd) {
+      $pythonCommand = $candidate
+      break
+    }
+  }
+  if (-not $pythonCommand) {
+    throw "Excel-Datei konnte nicht verarbeitet werden: Weder COM noch Python/py verfügbar."
+  }
+
+  try {
+    & $pythonCommand -c "import openpyxl" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "missing openpyxl" }
+  } catch {
+    Write-Info "openpyxl fehlt; installiere Python-Abhaengigkeit..."
+    & $pythonCommand -m pip install openpyxl
+    if ($LASTEXITCODE -ne 0) {
+      throw "openpyxl konnte nicht installiert werden."
+    }
+  }
+
+  $pythonScript = @"
+import os, re
+from pathlib import Path
+import openpyxl
+
+wb_path = Path(r'$WorkbookPath')
+root_path = Path(r'$rootPath')
+root_path.mkdir(parents=True, exist_ok=True)
+for child in root_path.iterdir():
+  if child.is_dir():
+    import shutil
+    shutil.rmtree(child)
+  else:
+    child.unlink()
+current_user = os.environ.get('USERNAME', '').strip().casefold()
+
+wb = openpyxl.load_workbook(wb_path, read_only=True, data_only=True)
+ws = wb.worksheets[0]
+for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, $MaxRows), values_only=True):
+    if len(row) < 2:
+        continue
+    a = '' if row[0] is None else str(row[0]).strip()
+    b = '' if row[1] is None else str(row[1]).strip()
+    if not a or not b or a.casefold() != current_user:
+        continue
+    safe_b = re.sub(r'[\\/:*?\"<>|]', '_', b).strip()
+    if not safe_b:
+        continue
+    (root_path / safe_b).mkdir(parents=True, exist_ok=True)
+    break
+
+wb.close()
+print(f'Python-Excel-Fallback: Ordner angelegt unter {root_path}')
+"@
+
+  try {
+    $null = & $pythonCommand -c $pythonScript
+    if ($LASTEXITCODE -ne 0) {
+      throw "Python-Excel-Fallback fehlgeschlagen (ExitCode $LASTEXITCODE)."
+    }
+    Write-Info "Ordner fuer Pruefungskandidaten wurden mit Python-Fallback angelegt."
+    return $rootPath
+  } catch {
+    throw "Excel-Datei konnte weder mit COM noch mit Python-Fallback verarbeitet werden: $($_.Exception.Message)"
+  }
+
   return $rootPath
 }
 
@@ -328,18 +404,22 @@ function New-CandidateFoldersFromCsv {
   if (-not (Test-Path $CsvPath)) { throw "CSV nicht gefunden: $CsvPath" }
   $rootPath = Join-Path $script:ScriptRoot '2. Bei Bedarf anpassen\Ordner'
   New-EnsuredPath $rootPath
+  $currentUser = [Environment]::UserName.Trim()
+  Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   $rows = Import-Csv -Path $CsvPath -Delimiter ';' -Header 'Account','Kandidat'
   $i = 0
   foreach ($row in $rows) {
     if ($i -ge $MaxRows) { break }
     $a = $row.Account; $b = $row.Kandidat
     if ([string]::IsNullOrWhiteSpace($a) -or [string]::IsNullOrWhiteSpace($b)) { continue }
-    $safeA = ($a -replace '[\\/:*?"<>|]', '_').Trim()
+    if (-not [string]::Equals($a.Trim(), $currentUser, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
     $safeB = ($b -replace '[\\/:*?"<>|]', '_').Trim()
-    if ([string]::IsNullOrWhiteSpace($safeA) -or [string]::IsNullOrWhiteSpace($safeB)) { continue }
-    $path = Join-Path (Join-Path $rootPath $safeA) $safeB
+    if ([string]::IsNullOrWhiteSpace($safeB)) { continue }
+    $path = Join-Path $rootPath $safeB
     New-EnsuredPath $path
+    Write-Info "Benutzer '$currentUser' gefunden; Ordner '$safeB' wird bereitgestellt."
     $i++
+    break
   }
   Write-Info "Ordner aus CSV angelegt (${i}) Zeilen."
   return $rootPath
@@ -407,7 +487,8 @@ function Start-AP1Konfiguration {
         [string]$CsvFallbackPath = '',
         [int]$MaxRows = 500,
         [switch]$Quiet,
-        [switch]$RegistryOnly
+        [switch]$RegistryOnly,
+        [switch]$UseCom
     )
 
     try {
@@ -418,7 +499,7 @@ function Start-AP1Konfiguration {
         # COM-Autodetektion
         $comOkWord = $false
         $comOkExcel = $false
-        if (-not $RegistryOnly) {
+        if ($UseCom -and -not $RegistryOnly) {
               Write-Info "[DEBUG] Pruefe COM-Verfuegbarkeit..."
             $comOkWord   = Test-ComAvailable -ProgId 'Word.Application'
             $comOkExcel  = Test-ComAvailable -ProgId 'Excel.Application'
@@ -439,12 +520,12 @@ function Start-AP1Konfiguration {
         $fileInfos = @()
         # Erneut die Dateinamen wie im Modul
         $fileNames = @(
-            "nuera2026_f.zip",
             "nuera2026_h.zip",
-            "nuera2025_f.zip",
+          "nuera2026_f.zip",
             "nuera2025_h.zip",
-            "nuera2024_f.zip",
-            "nuera2024_h.zip"
+          "nuera2025_f.zip",
+          "nuera2024_h.zip",
+          "nuera2024_f.zip"
         )
         foreach ($fileName in $fileNames) {
             $testPath = Join-Path $nueraDownloadPath $fileName
@@ -469,17 +550,20 @@ function Start-AP1Konfiguration {
         } else {
             WriteWarn "Nuera-Ordner konnte nicht bereitgestellt werden."
         }
-        # Office vorbereiten
+        # Office vorbereiten: COM nur auf ausdrücklichen Wunsch starten.
           Write-Info "[DEBUG] Initialisiere Office..."
-        Write-Info "Initialisiere Office..."
-        # Import-Module (Join-Path $PSScriptRoot 'Skript-Module\AP1-Office.psm1') -Force
-        Initialize-OfficeApps
+        if ($UseCom -and -not $RegistryOnly) {
+          Write-Info "Initialisiere Office per COM..."
+          Initialize-OfficeApps
+        } else {
+          $RegistryOnly = $true
+          Write-Info "Registry-only-Modus: Office wird nicht per COM gestartet."
+        }
           Write-Info "[DEBUG] Setze Office/Windows-Optionen..."
         Write-Info "Setze Office/Windows-Optionen..."
         Set-OfficeRegistrySettings
           Write-Info "[DEBUG] Setze Standard-Speicherpfade..."
-        Write-Info "Setze Standard-Speicherpfade auf Desktop..."
-        Set-DefaultSavePaths -Path $desktopPath -UseCom:(!$RegistryOnly)
+        Write-Info "Setze Standard-Speicherpfad auf den Benutzerordner..."
           Write-Info "[DEBUG] Uebernehme Autokorrektur..."
         Write-Info "Uebernehme Autokorrektur-Einstellungen..."
         Set-WordAutoCorrectRegistry
@@ -495,23 +579,19 @@ function Start-AP1Konfiguration {
         $rootPath = $null
         try {
             Write-Info "[DEBUG] Starte Ordnererzeugung..."
-          if (-not $RegistryOnly) {
-            if (-not $ExcelListPath) {
-              $ExcelListPath = Join-Path $script:ScriptRoot '1. Anpassen\AP1-TN.xlsx'
-                Write-Info "[DEBUG] ExcelListPath automatisch gesetzt: $ExcelListPath"
-            }
-              Write-Info "[DEBUG] Pruefe Existenz der Excel-Datei: $ExcelListPath"
-            if (-not (Test-Path $ExcelListPath)) {
-                Write-Info "[ERROR] Excel-Datei nicht gefunden: $ExcelListPath"
-              throw "Excel-Datei nicht gefunden: $ExcelListPath"
-            }
-            Write-Info "Erzeuge Kandidaten-Ordner aus Excel (COM)..."
-            $rootPath = New-CandidateFoldersFromExcel -WorkbookPath $ExcelListPath -MaxRows $MaxRows
+          if (-not $ExcelListPath) {
+            $ExcelListPath = Join-Path $script:ScriptRoot '1. Anpassen\AP1-TN.xlsx'
+            Write-Info "[DEBUG] ExcelListPath automatisch gesetzt: $ExcelListPath"
+          }
+          Write-Info "[DEBUG] Pruefe Existenz der Excel-Datei: $ExcelListPath"
+          if (Test-Path $ExcelListPath) {
+            Write-Info "Erzeuge Benutzerordner aus Excel (COM oder Python-Fallback)..."
+            $rootPath = New-CandidateFoldersFromExcel -WorkbookPath $ExcelListPath -MaxRows $MaxRows -NoCom:$RegistryOnly
           } elseif ($CsvFallbackPath) {
             Write-Info "COM nicht verfuegbar - nutze CSV-Fallback..."
             $rootPath = New-CandidateFoldersFromCsv -CsvPath $CsvFallbackPath -MaxRows $MaxRows
           } else {
-            WriteWarn "Kein COM und kein CsvFallbackPath - Ordnererzeugung wird uebersprungen."
+            throw "Excel-Datei nicht gefunden: $ExcelListPath"
           }
             Write-Info "[DEBUG] rootPath: $rootPath"
         } catch {
@@ -527,7 +607,14 @@ function Start-AP1Konfiguration {
         if ($rootPath) {
               Write-Info "[DEBUG] Kopiere Kandidaten-Ordner auf Desktop..."
             Write-Info "Lege Kandidaten-Ordner auf Desktop des aktuellen Nutzers..."
-            Copy-CandidateFolderToDesktop -SourceRoot $rootPath
+          $userFolderPath = Copy-CandidateFolderToDesktop -SourceRoot $rootPath
+          if ($userFolderPath) {
+            Write-Info "Setze Standard-Speicherpfad auf Benutzerordner: $userFolderPath"
+            Set-DefaultSavePaths -Path $userFolderPath -UseCom:(!$RegistryOnly)
+          } else {
+            WriteWarn "Kein passender Benutzerordner gefunden; verwende den Desktop als Speicherort."
+            Set-DefaultSavePaths -Path $desktopPath -UseCom:(!$RegistryOnly)
+          }
             Write-Info "Raeume temporaeren Ordner auf..."
             try {
                 Get-ChildItem $rootPath -ErrorAction SilentlyContinue |
@@ -574,6 +661,7 @@ function Main {
       MaxRows         = $MaxRows
       Quiet           = $Quiet
       RegistryOnly    = $RegistryOnly
+      UseCom          = $UseCom
     }
     Start-AP1Konfiguration @startParams
 }

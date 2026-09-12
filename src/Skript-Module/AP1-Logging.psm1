@@ -1,11 +1,8 @@
 # AP1-Logging.psm1
 function Write-Info {
 	param([string]$Message)
-	# Logging erfolgt über Transcript, keine Konsolenausgabe für [INFO] oder [DEBUG]
-	if ($Message -match '\[INFO\]' -or $Message -match '\[DEBUG\]') {
-		# Nur ins Transcript, keine Konsole
-		return
-	}
+	# Log-Ausgaben müssen auch im interaktiven/PowerShell-Lauf sichtbar sein.
+	# Das Start-Transcript erfasst dieselben Meldungen zusätzlich auf Datei.
 	WriteHostSafe $Message
 }
 function Write-SafeOutput {

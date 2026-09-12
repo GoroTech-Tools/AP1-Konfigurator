@@ -88,31 +88,45 @@ if (-not (Test-Path $releaseRoot)) {
 }
 
 $releaseNotesPath = Join-Path $releaseRoot ("RELEASE_NOTES_{0}.md" -f $versionTag)
+$releaseNotesTemplatePath = Join-Path $PSScriptRoot 'RELEASE_NOTES_TEMPLATE.md'
 $releaseZipPath = Join-Path $releaseRoot ("{0}-{1}.zip" -f $exeName, $versionTag)
 
-$lines = [System.Collections.Generic.List[string]]::new()
-$lines.Add("# Release Notes $versionTag")
-$lines.Add('')
-$lines.Add('## Änderungen')
-$lines.Add('')
-$lines.Add('- Build-Pipeline wurde erfolgreich ausgeführt und auf Konsistenz geprüft.')
-$lines.Add('- EXE-Launcher und eingebettete Laufzeitdateien wurden für den aktuellen Stand paketiert.')
-$lines.Add('- Projekt- und Build-Dokumentation wurde auf den aktuellen Versionsstand synchronisiert.')
-$lines.Add('')
-$lines.Add('## Ergebnis')
-$lines.Add('')
-$lines.Add('- Build über `src/build.ps1` erfolgreich.')
-$lines.Add('- Release-Artefakte erstellt:')
-$lines.Add(('  - `dist/{0}.exe`' -f $exeName))
-$lines.Add(('  - `release/{0}-{1}/`' -f $exeName, $versionTag))
-if (Test-Path $releaseZipPath) {
-    $lines.Add(('  - `release/{0}-{1}.zip`' -f $exeName, $versionTag))
-} else {
-    $lines.Add(('  - `release/{0}-{1}.zip` *(nicht gefunden)*' -f $exeName, $versionTag))
+if (-not (Test-Path $releaseNotesTemplatePath)) {
+    throw "Release-Notes-Template fehlt: $releaseNotesTemplatePath"
 }
-
-[System.IO.File]::WriteAllText($releaseNotesPath, ($lines -join "`r`n") + "`r`n", [System.Text.UTF8Encoding]::new($false))
+$releaseNotes = Get-Content $releaseNotesTemplatePath -Raw -Encoding UTF8
+$releaseNotes = $releaseNotes.Replace('vX.Y.Z', $versionTag).Replace('X.Y.Z', $newVersion)
+$releaseNotes = $releaseNotes.Replace('AP1-Konfigurator-Portable-' + $versionTag, $exeName + '-' + $versionTag)
+[System.IO.File]::WriteAllText($releaseNotesPath, $releaseNotes, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Release Notes erstellt/aktualisiert: $releaseNotesPath" -ForegroundColor Green
+
+# Ältere Release-Artefakte aus dem Hauptordner in _Archiv verschieben.
+$releaseArchive = Join-Path $releaseRoot '_Archiv'
+if (-not (Test-Path $releaseArchive)) {
+    New-Item -Path $releaseArchive -ItemType Directory -Force | Out-Null
+}
+$currentReleaseNames = @(
+    "$exeName-$versionTag",
+    "$exeName-$versionTag.zip",
+    "RELEASE_NOTES_$versionTag.md"
+)
+$versionedReleasePattern = '^(AP1-Konfigurator(?:-Portable)?-v\d+\.\d+\.\d+(?:\.zip)?|RELEASE_NOTES_v\d+\.\d+\.\d+\.md)$'
+$olderReleaseItems = @(Get-ChildItem -Path $releaseRoot -Force -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.Name -match $versionedReleasePattern -and $_.Name -notin $currentReleaseNames
+    })
+foreach ($releaseItem in $olderReleaseItems) {
+    $archiveTarget = Join-Path $releaseArchive $releaseItem.Name
+    if (Test-Path $archiveTarget) {
+        Remove-Item -LiteralPath $archiveTarget -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Move-Item -LiteralPath $releaseItem.FullName -Destination $archiveTarget -Force -ErrorAction SilentlyContinue
+    if (Test-Path $archiveTarget) {
+        Write-Host "Älteres Release archiviert: $($releaseItem.Name)" -ForegroundColor DarkGray
+    } else {
+        Write-Warning "Älteres Release konnte nicht archiviert werden: $($releaseItem.Name)"
+    }
+}
 
 if ($SkipZip) {
     Write-Host 'Hinweis: -SkipZip ist im aktuellen Buildablauf ohne Wirkung, da die Paketierung im Post-Build erfolgt.' -ForegroundColor Yellow

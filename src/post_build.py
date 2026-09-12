@@ -78,6 +78,40 @@ def copy_item(source: Path, relative_target: str, package_dir: Path) -> None:
         shutil.copy2(source, target)
 
 
+def ensure_data_mirror(source_data: Path, release_dir: Path) -> None:
+    """Ensure the unpacked release mirror contains the complete data tree."""
+    target_data = release_dir / 'data'
+    target_data.mkdir(parents=True, exist_ok=True)
+    for source in source_data.rglob('*'):
+        relative_path = source.relative_to(source_data)
+        target = target_data / relative_path
+        if source.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(source, target)
+        except PermissionError as exc:
+            print(f'warnung: data-Datei konnte nicht gespiegelt werden {target} ({exc}).')
+
+    expected = {
+        path.relative_to(source_data)
+        for path in source_data.rglob('*')
+        if path.is_file()
+    }
+    actual = {
+        path.relative_to(target_data)
+        for path in target_data.rglob('*')
+        if path.is_file()
+    }
+    missing = sorted(expected - actual)
+    if missing:
+        raise RuntimeError(
+            'Release-Spiegelordner unvollständig; fehlende data-Dateien: '
+            + ', '.join(str(path) for path in missing)
+        )
+
+
 def create_zip_archive(source_dir: Path, zip_path: Path) -> Path:
     if zip_path.exists():
         zip_path.unlink()
@@ -126,6 +160,7 @@ def main() -> int:
 
         if release_dir_ready:
             shutil.copytree(staging_package_dir, RELEASE_DIR, dirs_exist_ok=True)
+        ensure_data_mirror(ROOT / 'data', RELEASE_DIR)
         prune_obsolete_paths(RELEASE_DIR)
 
         zip_path = create_zip_archive(staging_package_dir, RELEASE_ROOT / f'{ARTIFACT_NAME}-{VERSION}.zip')

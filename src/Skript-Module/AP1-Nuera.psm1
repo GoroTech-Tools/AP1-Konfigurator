@@ -1,55 +1,70 @@
 # AP1-Nuera.psm1
+function Get-LatestNueraCandidate {
+    param(
+        [string[]]$FileNames = @(
+            "nuera2026_h.zip",
+            "nuera2026_f.zip",
+            "nuera2025_h.zip",
+            "nuera2025_f.zip",
+            "nuera2024_h.zip",
+            "nuera2024_f.zip"
+        )
+    )
+
+    $ordered = $FileNames | ForEach-Object {
+        $match = [regex]::Match($_, 'nuera(?<year>\d{4})_(?<kind>[fh])\.zip$', 'IgnoreCase')
+        if (-not $match.Success) {
+            return [pscustomobject]@{ Name = $_; Year = 0; KindOrder = 0 }
+        }
+
+        $kind = $match.Groups['kind'].Value.ToLowerInvariant()
+        # Bei gleichem Jahr ist die Herbstversion (h) die aktuellere Ausgabe.
+        $kindOrder = if ($kind -eq 'h') { 2 } else { 1 }
+        [pscustomobject]@{ Name = $_; Year = [int]$match.Groups['year'].Value; KindOrder = $kindOrder }
+    } | Sort-Object @{ Expression = 'Year'; Descending = $true }, @{ Expression = 'KindOrder'; Descending = $true }
+
+    return @($ordered | Select-Object -ExpandProperty Name)
+}
+
 function Get-LatestNueraFile {
     param([string]$DownloadPath = (Join-Path $script:ScriptRoot $script:NueraFolderName))
     Write-Info '[DEBUG] Get-LatestNueraFile: Funktionsstart'
     $BaseUrl = "https://www.ihk-aka.de/fileadmin/AkA/Download/Nuera/"
-    $PageUrl = $null  # Keine HTML-Seite, sondern gezielte Dateipruefung
 
     $headers = @{ 'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PowerShell' }
-    # Debug: Zielordner pruefen
     Write-Info "[DEBUG] DownloadPath: $DownloadPath"
     if (-not (Test-Path $DownloadPath)) {
         Write-Info "[DEBUG] DownloadPath existiert NICHT!"
-    } else {
-        Write-Info "[DEBUG] DownloadPath existiert. Schreibe Testdatei..."
-        try {
-            $testfile = Join-Path $DownloadPath 'write_test.txt'
-            Set-Content -Path $testfile -Value 'Test' -Force
-            if (Test-Path $testfile) {
-                Write-Info "[DEBUG] Schreibtest erfolgreich."
-                Remove-Item $testfile -Force
-            } else {
-                Write-Info "[DEBUG] Schreibtest FEHLGESCHLAGEN!"
+    }
+
+    New-Item -Path $DownloadPath -ItemType Directory -Force | Out-Null
+    $candidateNames = Get-LatestNueraCandidate
+    foreach ($fileName in $candidateNames) {
+        $folderName = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+        $folderPath = Join-Path $DownloadPath $folderName
+        $zipPath = Join-Path $DownloadPath $fileName
+        if ((Test-Path $folderPath) -and (Get-ChildItem $folderPath -Recurse -File -ErrorAction SilentlyContinue)) {
+            Write-Info "Verwende lokale Nuera-Datei: $fileName"
+            Get-ChildItem -Path $DownloadPath -Force -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^nuera\d{4}_[fh](\.zip)?$' -and $_.Name -notin @($fileName, $folderName) } |
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            return $folderPath
+        }
+        if (Test-Path $zipPath) {
+            if (Test-ExpandArchive -ZipPath $zipPath -Destination $DownloadPath) {
+                if (Test-Path $folderPath) {
+                    Write-Info "Entpacke lokale Nuera-Datei erneut: $fileName"
+                    return $folderPath
+                }
             }
-        } catch {
-            Write-Info "[DEBUG] Schreibtest Exception: $($_.Exception.Message)"
         }
     }
+    Get-ChildItem -Path $DownloadPath -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^nuera\d{4}_[fh](\.zip)?$' } |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Info 'Alte Nüra-Dateien und entpackte Ordner wurden entfernt.'
 
-    # Test: Download nach $env:TEMP
-    $tempTest = Join-Path $env:TEMP 'nuera2026_f_test.zip'
-    try {
-        Invoke-WebRequest -Uri "https://www.ihk-aka.de/fileadmin/AkA/Download/Nuera/nuera2026_f.zip" -OutFile $tempTest -UseBasicParsing -Headers $headers -ErrorAction Stop
-        if (Test-Path $tempTest) {
-            $size = (Get-Item $tempTest).Length
-            Write-Info "[DEBUG] Download nach $tempTest erfolgreich, Groesse: $size Byte"
-            Remove-Item $tempTest -Force
-        } else {
-            Write-Info "[DEBUG] Download nach $tempTest FEHLGESCHLAGEN!"
-        }
-    } catch {
-        Write-Info "[DEBUG] Download nach $tempTest Exception: $($_.Exception.Message)"
-    }
-
-    # Priorisierte Liste: Nur die erste existierende Datei wird geladen
-    $fileNames = @(
-        "nuera2026_f.zip",
-        "nuera2026_h.zip",
-        "nuera2025_f.zip",
-        "nuera2025_h.zip",
-        "nuera2024_f.zip",
-        "nuera2024_h.zip"
-    )
+    $fileNames = $candidateNames
     $found = $null
     foreach ($fileName in $fileNames) {
         $url = "$BaseUrl$fileName"
@@ -107,4 +122,4 @@ function Copy-NueraToDesktop {
     }
 }
 
-Export-ModuleMember -Function Get-LatestNueraFile,Copy-NueraToDesktop
+Export-ModuleMember -Function Get-LatestNueraCandidate,Get-LatestNueraFile,Copy-NueraToDesktop

@@ -29,5 +29,5 @@
 
 - Git-Tag: `vX.Y.Z`
 - GitHub-Release: `vX.Y.Z`
-- Lokales Release-ZIP: `release/AP1-Konfigurator-Portable-vX.Y.Z.zip`
+- Lokales Release-ZIP: `release/AP1-Konfigurator-vX.Y.Z.zip`
 - Falls ein Zusatzartefakt existiert, hier ebenfalls aufführen.
