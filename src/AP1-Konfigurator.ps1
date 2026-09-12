@@ -11,7 +11,7 @@ param(
   [switch]$UseCom
 )
 
-$script:AppVersion = '1.0.10'
+$script:AppVersion = '1.0.30'
 
 if ($PSScriptRoot) {
   $script:BaseRoot = $PSScriptRoot
@@ -281,12 +281,25 @@ function Copy-ExcelTemplate {
 # ============================================
 # Region: Ordnererzeugung & Desktop-Deployment
 # ============================================
+function Remove-EmptyCandidateRoot {
+  param([string]$RootPath)
+  if (-not $RootPath) { return }
+  if (Test-Path $RootPath) {
+    $childItems = @(Get-ChildItem -Path $RootPath -Force -ErrorAction SilentlyContinue)
+    if ($childItems.Count -eq 0) {
+      Remove-Item -Path $RootPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 function New-CandidateFoldersFromExcel {
   param([Parameter(Mandatory)] [string]$WorkbookPath, [int]$MaxRows = 500, [switch]$NoCom)
   $rootPath = Join-Path $script:ScriptRoot '2. Bei Bedarf anpassen\Ordner'
   New-EnsuredPath $rootPath
   $currentUser = [Environment]::UserName.Trim()
   Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-EmptyCandidateRoot -RootPath $rootPath
+  New-EnsuredPath $rootPath
 
   $excel = $null; $wb = $null
   try {
@@ -406,6 +419,8 @@ function New-CandidateFoldersFromCsv {
   New-EnsuredPath $rootPath
   $currentUser = [Environment]::UserName.Trim()
   Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-EmptyCandidateRoot -RootPath $rootPath
+  New-EnsuredPath $rootPath
   $rows = Import-Csv -Path $CsvPath -Delimiter ';' -Header 'Account','Kandidat'
   $i = 0
   foreach ($row in $rows) {
@@ -619,6 +634,9 @@ function Start-AP1Konfiguration {
             try {
                 Get-ChildItem $rootPath -ErrorAction SilentlyContinue |
                     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                if (-not (Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue)) {
+                    Remove-Item -Path $rootPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
             } catch {}
         }
         # Taskbar und Proxy

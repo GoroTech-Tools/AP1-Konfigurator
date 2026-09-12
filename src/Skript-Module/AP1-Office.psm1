@@ -56,6 +56,46 @@ function Test-OfficeFirstRun {
     return ($wordFirstRun -or $excelFirstRun)
 }
 
+function Confirm-OfficeWelcomeDialogs {
+    param(
+        [string[]]$ProcessNames = @('WINWORD', 'EXCEL'),
+        [int]$Attempts = 5,
+        [int]$DelaySeconds = 2
+    )
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+    } catch {
+        WriteWarn "System.Windows.Forms konnte nicht geladen werden; Tastendruck zum Bestätigen wurde übersprungen."
+        return
+    }
+
+    $shell = New-Object -ComObject WScript.Shell -ErrorAction SilentlyContinue
+    if (-not $shell) {
+        WriteWarn "WScript.Shell nicht verfügbar; Office-Willkommensdialoge konnten nicht automatisch bestätigt werden."
+        return
+    }
+
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        foreach ($processName in $ProcessNames) {
+            $proc = Get-Process $processName -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 1
+            if (-not $proc) { continue }
+
+            try {
+                $null = $shell.AppActivate($proc.Id)
+                Start-Sleep -Milliseconds 300
+                [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+                Start-Sleep -Milliseconds 250
+                [System.Windows.Forms.SendKeys]::SendWait(' ')
+                Write-Info "Office-Willkommensdialog für $processName automatisch bestätigt (Versuch $attempt/$Attempts)."
+            } catch {
+                WriteWarn "Bestätigung für $processName fehlgeschlagen: $($_.Exception.Message)"
+            }
+        }
+        if ($attempt -lt $Attempts) { Start-Sleep -Seconds $DelaySeconds }
+    }
+}
+
 function Initialize-OfficeApps {
     Write-Info "Initialisiere Word/Excel (robust)..."
     $maxTries = 3
@@ -78,9 +118,9 @@ function Initialize-OfficeApps {
         }
         if ($isActualFirstRun -and $processStarted) {
             Write-Host -ForegroundColor Yellow "`nErster Office-Start erkannt!"
-            Write-Host -ForegroundColor Yellow "Bitte bestaetigen Sie ggf. alle Office-Hinweisfenster (z.B. Lizenz, Datenschutz, Willkommen) und klicken Sie auf OK."
-            Write-Host -ForegroundColor Yellow "Erst danach bitte eine beliebige Taste druecken, damit das Skript fortfaehrt."
-            [void][System.Console]::ReadKey($true)
+            Write-Host -ForegroundColor Yellow "Versuche, Office-Willkommensfenster automatisch zu bestaetigen..."
+            Confirm-OfficeWelcomeDialogs -ProcessNames @('WINWORD', 'EXCEL') -Attempts 6 -DelaySeconds 2
+            Write-Host -ForegroundColor Yellow "Wenn ein Hinweisfenster offen bleibt, kann das Skript nach kurzer Zeit automatisch weiterlaufen."
         } elseif ($processStarted) {
             Write-Info "Office-Prozesse gestartet (kein First-Run erkannt)"
             Start-Sleep -Seconds 2
@@ -127,4 +167,4 @@ function Initialize-OfficeApps {
     }
 }
 
-Export-ModuleMember -Function Test-OfficeFirstRun,Initialize-OfficeApps
+Export-ModuleMember -Function Test-OfficeFirstRun,Confirm-OfficeWelcomeDialogs,Initialize-OfficeApps
