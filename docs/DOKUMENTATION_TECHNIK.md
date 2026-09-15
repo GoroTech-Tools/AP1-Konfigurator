@@ -1,6 +1,6 @@
 # DOKUMENTATION TECHNIK
 
-Aktueller Stand: **v1.0.26** · Letzte Aktualisierung: **12. September 2026**
+Aktueller Stand: **v1.0.30** · Letzte Aktualisierung: **12. September 2026**
 
 ## Inhaltsverzeichnis
 
