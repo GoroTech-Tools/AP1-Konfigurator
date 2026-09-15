@@ -1,8 +1,9 @@
 BUILD_INFO = {
-    'version': '1.0.30',
-    'build_date': '2026-09-12T14:34:26',
+    'version': '1.0.32',
+    'build_date': '2026-09-15T17:38:51',
     'artifact_name': 'AP1-Konfigurator',
 }
+
 
 
 
