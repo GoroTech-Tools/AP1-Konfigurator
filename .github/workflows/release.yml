@@ -55,6 +55,10 @@ jobs:
           Set-Content $path $content -Encoding UTF8
           Write-Host "Build-Version auf $version gesetzt."
 
+      - name: Update documentation version and build date
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe src\update_docs_versions.py
+
       - name: Build and package application
         shell: pwsh
         run: .\src\build.ps1 -NoVersionBump
