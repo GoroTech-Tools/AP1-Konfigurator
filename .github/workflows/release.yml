@@ -59,6 +59,22 @@ jobs:
         shell: pwsh
         run: .\.venv\Scripts\python.exe src\update_docs_versions.py
 
+      - name: Persist release version in main documentation
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs src/build_info.py
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "docs: synchronize release version $env:RELEASE_TAG"
+            git push origin HEAD:main
+          } else {
+            Write-Host "Dokumentation ist bereits aktuell."
+          }
+
       - name: Build and package application
         shell: pwsh
         run: .\src\build.ps1 -NoVersionBump
