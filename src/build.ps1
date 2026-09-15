@@ -100,6 +100,11 @@ $releaseNotes = $releaseNotes.Replace('AP1-Konfigurator-Portable-' + $versionTag
 [System.IO.File]::WriteAllText($releaseNotesPath, $releaseNotes, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Release Notes erstellt/aktualisiert: $releaseNotesPath" -ForegroundColor Green
 
+if (-not (Test-Path $releaseZipPath)) {
+    throw "Release-ZIP fehlt nach dem Build: $releaseZipPath"
+}
+Write-Host "Release ZIP bereit: $releaseZipPath" -ForegroundColor Green
+
 # Ältere Release-Artefakte aus dem Hauptordner in _Archiv verschieben.
 $releaseArchive = Join-Path $releaseRoot '_Archiv'
 if (-not (Test-Path $releaseArchive)) {

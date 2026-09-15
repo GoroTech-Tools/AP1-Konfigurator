@@ -5,6 +5,8 @@ function New-CandidateFoldersFromExcel {
 	New-EnsuredPath $rootPath
 	$currentUser = [Environment]::UserName.Trim()
 	Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+	Remove-EmptyCandidateRoot -RootPath $rootPath
+	New-EnsuredPath $rootPath
 	$excel = $null; $wb = $null
 	try {
 		$excel = New-Object -ComObject Excel.Application -ErrorAction Stop
@@ -119,6 +121,8 @@ function New-CandidateFoldersFromCsv {
 	New-EnsuredPath $rootPath
 	$currentUser = [Environment]::UserName.Trim()
 	Get-ChildItem -Path $rootPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+	Remove-EmptyCandidateRoot -RootPath $rootPath
+	New-EnsuredPath $rootPath
 	$rows = Import-Csv -Path $CsvPath -Delimiter ';' -Header 'Account','Kandidat'
 	$i = 0
 	foreach ($row in $rows) {
@@ -136,6 +140,16 @@ function New-CandidateFoldersFromCsv {
 	}
 	Write-Info "Ordner aus CSV angelegt (${i}) Zeilen."
 	return $rootPath
+}
+function Remove-EmptyCandidateRoot {
+	param([string]$RootPath)
+	if (-not $RootPath) { return }
+	if (Test-Path $RootPath) {
+		$childItems = @(Get-ChildItem -Path $RootPath -Force -ErrorAction SilentlyContinue)
+		if ($childItems.Count -eq 0) {
+			Remove-Item -Path $RootPath -Recurse -Force -ErrorAction SilentlyContinue
+		}
+	}
 }
 function Copy-CandidateFolderToDesktop {
 	param([string]$SourceRoot)
@@ -180,4 +194,4 @@ function Join-PathSafe {
 function Get-DesktopPath { [Environment]::GetFolderPath('Desktop') }
 
 # Alle Funktionsdefinitionen bleiben unverändert
-Export-ModuleMember -Function New-CandidateFoldersFromExcel,New-CandidateFoldersFromCsv,Copy-CandidateFolderToDesktop,New-EnsuredPath,Join-PathSafe,Get-DesktopPath
+Export-ModuleMember -Function New-CandidateFoldersFromExcel,New-CandidateFoldersFromCsv,Copy-CandidateFolderToDesktop,Remove-EmptyCandidateRoot,New-EnsuredPath,Join-PathSafe,Get-DesktopPath
