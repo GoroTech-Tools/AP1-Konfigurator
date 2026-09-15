@@ -116,6 +116,8 @@ Die PowerShell-Ressourcen und Module werden nicht separat mitgeliefert, sondern 
 
 Das Build-System ist in `src/build.ps1` und `src/post_build.py` organisiert. Es erzeugt die versionierte Release-Struktur und das ZIP-Artefakt für GitHub.
 
+Für lokale Builds und GitHub Actions wird Python 3.13 verwendet. Die lokale Umgebung wird mit `src/setup.ps1` als `.venv` angelegt.
+
 - `src/build.ps1` prüft die Version, erzeugt die EXE und aktualisiert die Projekt-Doku
 - `src/post_build.py` schafft den finalen Release-Ordner und das komprimierte Asset
 - `release/` enthält die veröffentlichungsrelevanten Artefakte und Release-Notizen

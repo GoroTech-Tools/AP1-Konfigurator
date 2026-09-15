@@ -1,7 +1,7 @@
 param(
     [switch]$Force,
     [string]$VenvName = '.venv',
-    [string]$PythonVersion = '3.12'
+    [string]$PythonVersion = '3.13'
 )
 
 $ErrorActionPreference = 'Stop'
