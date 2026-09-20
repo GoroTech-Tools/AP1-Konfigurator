@@ -1,5 +1,10 @@
 # AP1-Konfigurator v1.0.30
 
+## Download
+
+- [Release-Seite v1.0.30](https://github.com/GoroTech-Tools/AP1-Konfigurator/releases/tag/v1.0.30)
+- [ZIP direkt herunterladen](https://github.com/GoroTech-Tools/AP1-Konfigurator/releases/download/v1.0.30/AP1-Konfigurator-v1.0.30.zip)
+
 ## Highlights
 
 - Stabilere Erststart-Initialisierung für Word und Excel

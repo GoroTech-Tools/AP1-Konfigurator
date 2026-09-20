@@ -110,6 +110,20 @@ jobs:
           name: AP1-Konfigurator-release-${{ github.sha }}
           path: release
 
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: AP1-Konfigurator-${{ github.sha }}
+          path: build-artifact
+
+      - name: Locate release notes
+        id: release_notes
+        shell: bash
+        run: |
+          notes_path="$(find build-artifact/release -maxdepth 1 -name 'RELEASE_NOTES_v*.md' -print -quit)"
+          test -n "$notes_path"
+          echo "path=$notes_path" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
@@ -118,4 +132,5 @@ jobs:
           files: |
             release/AP1-Konfigurator-*.zip
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          body_path: ${{ steps.release_notes.outputs.path }}
+          generate_release_notes: false

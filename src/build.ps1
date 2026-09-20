@@ -40,7 +40,8 @@ $newVersion = "$major.$minor.$patch"
 $newDate = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss')
 $content = $content -replace "'version':\s*'[0-9]+\.[0-9]+\.[0-9]+'", "'version': '$newVersion'"
 $content = $content -replace "'build_date':\s*'[^']+'", "'build_date': '$newDate'"
-Set-Content -Path $buildInfoPath -Value $content -Encoding UTF8
+$content = $content.TrimEnd() + [Environment]::NewLine
+[System.IO.File]::WriteAllText($buildInfoPath, $content, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Version: $newVersion" -ForegroundColor Green
 
 & $pythonExe (Join-Path $ProjectRoot 'src\update_docs_versions.py')
@@ -94,16 +95,34 @@ $releaseZipPath = Join-Path $releaseRoot ("{0}-{1}.zip" -f $exeName, $versionTag
 if (-not (Test-Path $releaseNotesTemplatePath)) {
     throw "Release-Notes-Template fehlt: $releaseNotesTemplatePath"
 }
-$releaseNotes = Get-Content $releaseNotesTemplatePath -Raw -Encoding UTF8
-$releaseNotes = $releaseNotes.Replace('vX.Y.Z', $versionTag).Replace('X.Y.Z', $newVersion)
-$releaseNotes = $releaseNotes.Replace('AP1-Konfigurator-Portable-' + $versionTag, $exeName + '-' + $versionTag)
-[System.IO.File]::WriteAllText($releaseNotesPath, $releaseNotes, [System.Text.UTF8Encoding]::new($false))
-Write-Host "Release Notes erstellt/aktualisiert: $releaseNotesPath" -ForegroundColor Green
 
 if (-not (Test-Path $releaseZipPath)) {
     throw "Release-ZIP fehlt nach dem Build: $releaseZipPath"
 }
 Write-Host "Release ZIP bereit: $releaseZipPath" -ForegroundColor Green
+
+$zipInfo = Get-Item $releaseZipPath
+$zipHash = (Get-FileHash -Path $releaseZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$commitSha = 'nicht verfügbar'
+try {
+    $candidateCommitSha = (git -C $ProjectRoot rev-parse --short HEAD 2>$null | Select-Object -First 1)
+    if (-not [string]::IsNullOrWhiteSpace($candidateCommitSha)) {
+        $commitSha = $candidateCommitSha.Trim()
+    }
+} catch {
+    # Release Notes bleiben auch ohne Git-Informationen verwendbar.
+}
+
+$releaseNotes = Get-Content $releaseNotesTemplatePath -Raw -Encoding UTF8
+$releaseNotes = $releaseNotes.Replace('vX.Y.Z', $versionTag).Replace('X.Y.Z', $newVersion)
+$releaseNotes = $releaseNotes.Replace('AP1-Konfigurator-Portable-' + $versionTag, $exeName + '-' + $versionTag)
+$releaseNotes = $releaseNotes.Replace('{{BUILD_DATE}}', (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
+$releaseNotes = $releaseNotes.Replace('{{COMMIT_SHA}}', $commitSha)
+$releaseNotes = $releaseNotes.Replace('{{ZIP_FILENAME}}', $zipInfo.Name)
+$releaseNotes = $releaseNotes.Replace('{{ZIP_SIZE_MIB}}', ('{0:N2}' -f ($zipInfo.Length / 1MB)))
+$releaseNotes = $releaseNotes.Replace('{{ZIP_SHA256}}', $zipHash)
+[System.IO.File]::WriteAllText($releaseNotesPath, $releaseNotes, [System.Text.UTF8Encoding]::new($false))
+Write-Host "Release Notes erstellt/aktualisiert: $releaseNotesPath" -ForegroundColor Green
 
 # Ältere Release-Artefakte aus dem Hauptordner in _Archiv verschieben.
 $releaseArchive = Join-Path $releaseRoot '_Archiv'

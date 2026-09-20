@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.33 - 2026-09-20
+
+### Release und Dokumentation
+
+- Release Notes enthalten direkte GitHub-Downloadlinks sowie automatisierte Informationen zu Buildzeit, Commit, ZIP-Größe und SHA-256-Prüfsumme.
+- GitHub Actions verwendet die erzeugten Release Notes als sichtbaren Release-Body statt ausschließlich automatischer Changelog-Notizen.
+
 ## v1.0.16 - 2026-06-28
 
 ### GUI und Laufstatus
