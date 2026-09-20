@@ -15,7 +15,7 @@
 - Der Ablaufstatus wird laufend aktualisiert; bei erfolgreichem Abschluss wird der Balken grün und zeigt `Fertig`.
 - Bei Fehlern wird ein klarer Fehlerzustand mit roter Abschlussmarkierung ausgegeben.
 
-### Dokumentation
+### Dokumentation (v1.0.16)
 
 - README sowie Anwender-/Technikdokumentation auf den aktuellen GUI- und Release-Stand synchronisiert.
 
@@ -34,7 +34,7 @@
 
 ## v1.0.11 - 2026-06-28
 
-### Dokumentation
+### Dokumentation (v1.0.11)
 
 - Die kanonische Projektdokumentation wurde analog zu den Schwesterprojekten nach `docs/` überführt.
 - Neue Standarddateien angelegt: `docs/DOKUMENTATION_ANWENDER.md`, `docs/DOKUMENTATION_TECHNIK.md`, `docs/KURZDOKUMENTATION.txt`, `docs/DOKUMENTATION_CHECKLISTE.md`.

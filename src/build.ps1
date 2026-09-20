@@ -121,6 +121,7 @@ $releaseNotes = $releaseNotes.Replace('{{COMMIT_SHA}}', $commitSha)
 $releaseNotes = $releaseNotes.Replace('{{ZIP_FILENAME}}', $zipInfo.Name)
 $releaseNotes = $releaseNotes.Replace('{{ZIP_SIZE_MIB}}', ('{0:N2}' -f ($zipInfo.Length / 1MB)))
 $releaseNotes = $releaseNotes.Replace('{{ZIP_SHA256}}', $zipHash)
+$releaseNotes = $releaseNotes.TrimEnd() + [Environment]::NewLine
 [System.IO.File]::WriteAllText($releaseNotesPath, $releaseNotes, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Release Notes erstellt/aktualisiert: $releaseNotesPath" -ForegroundColor Green
 
