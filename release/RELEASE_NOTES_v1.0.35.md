@@ -1,15 +1,15 @@
-# AP1-Konfigurator v1.0.34
+# AP1-Konfigurator v1.0.35
 
 ## Release-Übersicht
 
-- Erstellungszeitpunkt: 2026-09-21 18:21:12
-- Quellstand: `c1f9ad3`
+- Erstellungszeitpunkt: 2026-09-21 18:31:49
+- Quellstand: `18a7291`
 - Auslieferungsformat: Portable Onefile-EXE für Windows
 
 ## Download
 
-- [Release-Seite v1.0.34](https://github.com/GoroTech-Tools/AP1-Konfigurator/releases/tag/v1.0.34)
-- [ZIP direkt herunterladen](https://github.com/GoroTech-Tools/AP1-Konfigurator/releases/download/v1.0.34/AP1-Konfigurator-v1.0.34.zip)
+- [Release-Seite v1.0.35](https://github.com/GoroTech-Tools/AP1-Konfigurator/releases/tag/v1.0.35)
+- [ZIP direkt herunterladen](https://github.com/GoroTech-Tools/AP1-Konfigurator/releases/download/v1.0.35/AP1-Konfigurator-v1.0.35.zip)
 
 ## Lieferumfang
 
@@ -41,11 +41,11 @@
 - PyInstaller-Onefile-Build erfolgreich erzeugt.
 - Versionierte ZIP-Datei nach der Paketierung vorhanden.
 - ZIP-Größe: 20,63 MiB
-- ZIP-SHA-256: `b1fa45ef22a03219a4c46e36640c4427c7a9619cb6d947ebd565ba8fd28f74ee`
+- ZIP-SHA-256: `b5e4359ce22929fc1f5c774187026b0dbdbf26ebb10096946661ba46ed90899d`
 
 ## Artefakte und GitHub-Hinweis
 
-- Git-Tag: `v1.0.34`
-- GitHub-Release: `v1.0.34`
-- Lokales Release-ZIP: `release/AP1-Konfigurator-v1.0.34.zip`
-- Commit zum Zeitpunkt der lokalen Paketierung: `c1f9ad3`
+- Git-Tag: `v1.0.35`
+- GitHub-Release: `v1.0.35`
+- Lokales Release-ZIP: `release/AP1-Konfigurator-v1.0.35.zip`
+- Commit zum Zeitpunkt der lokalen Paketierung: `18a7291`

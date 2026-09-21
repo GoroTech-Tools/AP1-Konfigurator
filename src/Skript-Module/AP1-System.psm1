@@ -36,6 +36,18 @@ function Set-TaskbarSettings {
 		'TaskbarGlomLevel' = 2
 	}
 	Set-RegistryValues -RegPath $regSea -Settings @{ 'SearchboxTaskbarMode' = $searchValue }
+	try {
+		$notify = Add-Type -Name Win32TaskbarRefresh -Namespace Win32 -PassThru -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out IntPtr result);
+'@
+		$hwnd = [IntPtr]0xffff
+		$msg = 0x001A
+		$result = [IntPtr]::Zero
+		$notify::SendMessageTimeout($hwnd, $msg, [IntPtr]::Zero, "TrayNotify", 0x0002, 1000, [ref]$result) | Out-Null
+	} catch {
+		Write-Info "Taskbar-Refresh ohne Explorer-Neustart übersprungen: $($_.Exception.Message)"
+	}
 }
 function Stop-NamedProcess {
 	param([string]$Name)

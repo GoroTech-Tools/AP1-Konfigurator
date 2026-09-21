@@ -13,3 +13,7 @@ def test_taskbar_glom_level_is_configured() -> None:
     assert "TaskbarGlomLevel" in module
     assert "= 2" in ps1
     assert "= 2" in module
+    assert "SendMessageTimeout" in ps1
+    assert "SendMessageTimeout" in module
+    assert "Stop-Process -Name explorer" not in ps1
+    assert "Stop-Process -Name explorer" not in module
