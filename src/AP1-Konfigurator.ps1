@@ -482,7 +482,10 @@ function Set-TaskbarSettings {
   $taskbarValue = if ($Alignment -eq 'Left') { 0 } else { 1 }
   $searchValue = switch ($Search) { 'Hidden' {0} 'Icon' {1} 'Box' {2} }
   Write-Info "Setze Taskbar: Alignment=$Alignment, Search=$Search"
-  Set-RegistryValues -RegPath $regAdv -Settings @{ 'TaskbarAl' = $taskbarValue }
+  Set-RegistryValues -RegPath $regAdv -Settings @{
+    'TaskbarAl' = $taskbarValue
+    'TaskbarGlomLevel' = 2
+  }
   Set-RegistryValues -RegPath $regSea -Settings @{ 'SearchboxTaskbarMode' = $searchValue }
   # Explorer-Neustart bewusst nicht erzwungen
 }

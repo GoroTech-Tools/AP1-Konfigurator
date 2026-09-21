@@ -1,7 +1,7 @@
 
 # AP1-Konfigurator
 
-Aktueller Stand: **v1.0.33** · Letzte Aktualisierung: **20. September 2026**
+Aktueller Stand: **v1.0.34** · Letzte Aktualisierung: **21. September 2026**
 
 Der `AP1-Konfigurator` automatisiert die Vorbereitung von Prüfungsrechnern für die Abschlussprüfung Teil 1 (AP1) auf Windows-Systemen. Das Projekt setzt Office-Defaults, Standardordner, Proxy-Optionen, Kandidatenstruktur und Nuera-Dateien in einer nachvollziehbaren Reihenfolge auf, damit die Einrichtung ohne manuelle Fehlerquellen wiederholbar bleibt.
 
@@ -128,7 +128,7 @@ Für lokale Builds und GitHub Actions wird Python 3.13 verwendet. Die lokale Umg
 - Technik-Dokumentation: [`docs/DOKUMENTATION_TECHNIK.md`](./docs/DOKUMENTATION_TECHNIK.md)
 - Checkliste: [`docs/DOKUMENTATION_CHECKLISTE.md`](./docs/DOKUMENTATION_CHECKLISTE.md)
 - Änderungsübersicht: [`docs/CHANGELOG.md`](./docs/CHANGELOG.md)
-- Release-Hinweise: [`release/RELEASE_NOTES_v1.0.33.md`](./release/RELEASE_NOTES_v1.0.33.md)
+- Release-Hinweise: [`release/RELEASE_NOTES_v1.0.34.md`](./release/RELEASE_NOTES_v1.0.34.md)
 
 ## Hinweise zur Nutzung
 
@@ -139,4 +139,4 @@ Für lokale Builds und GitHub Actions wird Python 3.13 verwendet. Die lokale Umg
 
 ## Lizenz und Projektstatus
 
-Das Projekt wird für die interne AP1-Vorbereitung in einer Windows-Office-Umgebung entwickelt. Der aktuelle Release-Stand ist `v1.0.30`. Für neue Releases und Änderungen wird die Version zentral über die Build-Informationen gepflegt; die Dokumentation wird im gleichen Schritt synchronisiert.
+Das Projekt wird für die interne AP1-Vorbereitung in einer Windows-Office-Umgebung entwickelt. Der aktuelle Release-Stand ist v1.0.33. Für neue Releases und Änderungen wird die Version zentral über die Build-Informationen gepflegt; die Dokumentation wird im gleichen Schritt synchronisiert.
