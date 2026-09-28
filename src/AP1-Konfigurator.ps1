@@ -340,73 +340,121 @@ function New-CandidateFoldersFromExcel {
     Stop-NamedProcess EXCEL
   }
 
-  $pythonCommand = $null
-  foreach ($candidate in @('python', 'py')) {
-    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-    if ($cmd) {
-      $pythonCommand = $candidate
-      break
-    }
-  }
-  if (-not $pythonCommand) {
-    throw "Excel-Datei konnte nicht verarbeitet werden: Weder COM noch Python/py verfügbar."
-  }
-
   try {
-    & $pythonCommand -c "import openpyxl" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "missing openpyxl" }
-  } catch {
-    Write-Info "openpyxl fehlt; installiere Python-Abhaengigkeit..."
-    & $pythonCommand -m pip install openpyxl
-    if ($LASTEXITCODE -ne 0) {
-      throw "openpyxl konnte nicht installiert werden."
+    Add-Type -AssemblyName 'System.IO.Compression'
+    Add-Type -AssemblyName 'System.IO.Compression.FileSystem'
+
+    function Get-XlsxEntryText {
+      param(
+        [Parameter(Mandatory)][System.IO.Compression.ZipArchive]$Archive,
+        [Parameter(Mandatory)][string]$EntryPath
+      )
+      $entry = $Archive.GetEntry($EntryPath)
+      if (-not $entry) { throw "XLSX-Eintrag fehlt: $EntryPath" }
+      $stream = $entry.Open()
+      try {
+        $reader = New-Object System.IO.StreamReader($stream)
+        try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+      } finally { $stream.Dispose() }
     }
-  }
 
-  $pythonScript = @"
-import os, re
-from pathlib import Path
-import openpyxl
-
-wb_path = Path(r'$WorkbookPath')
-root_path = Path(r'$rootPath')
-root_path.mkdir(parents=True, exist_ok=True)
-for child in root_path.iterdir():
-  if child.is_dir():
-    import shutil
-    shutil.rmtree(child)
-  else:
-    child.unlink()
-current_user = os.environ.get('USERNAME', '').strip().casefold()
-
-wb = openpyxl.load_workbook(wb_path, read_only=True, data_only=True)
-ws = wb.worksheets[0]
-for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, $MaxRows), values_only=True):
-    if len(row) < 2:
-        continue
-    a = '' if row[0] is None else str(row[0]).strip()
-    b = '' if row[1] is None else str(row[1]).strip()
-    if not a or not b or a.casefold() != current_user:
-        continue
-    safe_b = re.sub(r'[\\/:*?\"<>|]', '_', b).strip()
-    if not safe_b:
-        continue
-    (root_path / safe_b).mkdir(parents=True, exist_ok=True)
-    break
-
-wb.close()
-print(f'Python-Excel-Fallback: Ordner angelegt unter {root_path}')
-"@
-
-  try {
-    $null = & $pythonCommand -c $pythonScript
-    if ($LASTEXITCODE -ne 0) {
-      throw "Python-Excel-Fallback fehlgeschlagen (ExitCode $LASTEXITCODE)."
+    function Get-XlsxCellText {
+      param(
+        [Parameter(Mandatory)][System.Xml.XmlNode]$CellNode,
+        [Parameter(Mandatory)][string[]]$SharedStrings,
+        [Parameter(Mandatory)][System.Xml.XmlNamespaceManager]$NamespaceManager
+      )
+      $type = $CellNode.GetAttribute('t')
+      if ($type -eq 's') {
+        $indexText = $CellNode.SelectSingleNode('s:v', $NamespaceManager).InnerText
+        $index = 0
+        if ([int]::TryParse($indexText, [ref]$index) -and $index -ge 0 -and $index -lt $SharedStrings.Count) {
+          return $SharedStrings[$index]
+        }
+        return ''
+      }
+      if ($type -eq 'inlineStr') {
+        $inlineTextNodes = $CellNode.SelectNodes('s:is//s:t', $NamespaceManager)
+        if (-not $inlineTextNodes -or $inlineTextNodes.Count -eq 0) { return '' }
+        return (($inlineTextNodes | ForEach-Object { $_.InnerText }) -join '')
+      }
+      $valueNode = $CellNode.SelectSingleNode('s:v', $NamespaceManager)
+      if ($valueNode) { return $valueNode.InnerText }
+      return ''
     }
-    Write-Info "Ordner fuer Pruefungskandidaten wurden mit Python-Fallback angelegt."
+
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($WorkbookPath)
+    try {
+      $workbookXmlContent = Get-XlsxEntryText -Archive $zip -EntryPath 'xl/workbook.xml'
+      [xml]$workbookXml = $workbookXmlContent
+      $workbookNs = New-Object System.Xml.XmlNamespaceManager($workbookXml.NameTable)
+      $workbookNs.AddNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
+      $workbookNs.AddNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships')
+      $firstSheet = $workbookXml.SelectSingleNode('/m:workbook/m:sheets/m:sheet[1]', $workbookNs)
+      if (-not $firstSheet) { throw 'Kein Tabellenblatt in XLSX gefunden.' }
+      $sheetRelationId = $firstSheet.GetAttribute('id', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships')
+      if ([string]::IsNullOrWhiteSpace($sheetRelationId)) { throw 'Tabellenblatt-Relation in XLSX fehlt.' }
+
+      $relsXmlContent = Get-XlsxEntryText -Archive $zip -EntryPath 'xl/_rels/workbook.xml.rels'
+      [xml]$relsXml = $relsXmlContent
+      $relsNs = New-Object System.Xml.XmlNamespaceManager($relsXml.NameTable)
+      $relsNs.AddNamespace('r', 'http://schemas.openxmlformats.org/package/2006/relationships')
+      $sheetRel = $relsXml.SelectSingleNode("/r:Relationships/r:Relationship[@Id='$sheetRelationId']", $relsNs)
+      if (-not $sheetRel) { throw "Tabellenblatt-Target fuer Relation '$sheetRelationId' fehlt." }
+
+      $sheetTarget = $sheetRel.GetAttribute('Target')
+      if ([string]::IsNullOrWhiteSpace($sheetTarget)) { throw "Tabellenblatt-Target fuer Relation '$sheetRelationId' ist leer." }
+      $workbookUri = [System.Uri]::new('http://local/xl/workbook.xml')
+      $sheetUri = [System.Uri]::new($workbookUri, $sheetTarget)
+      $sheetEntryPath = $sheetUri.AbsolutePath.TrimStart('/')
+
+      $sharedStrings = @()
+      $sharedStringsEntry = $zip.GetEntry('xl/sharedStrings.xml')
+      if ($sharedStringsEntry) {
+        [xml]$sharedStringsXml = Get-XlsxEntryText -Archive $zip -EntryPath 'xl/sharedStrings.xml'
+        $sharedNs = New-Object System.Xml.XmlNamespaceManager($sharedStringsXml.NameTable)
+        $sharedNs.AddNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
+        $sharedStringNodes = $sharedStringsXml.SelectNodes('/s:sst/s:si', $sharedNs)
+        foreach ($sharedStringNode in $sharedStringNodes) {
+          $textNodes = $sharedStringNode.SelectNodes('.//s:t', $sharedNs)
+          if ($textNodes -and $textNodes.Count -gt 0) {
+            $sharedStrings += (($textNodes | ForEach-Object { $_.InnerText }) -join '')
+          } else {
+            $sharedStrings += ''
+          }
+        }
+      }
+
+      [xml]$sheetXml = Get-XlsxEntryText -Archive $zip -EntryPath $sheetEntryPath
+      $sheetNs = New-Object System.Xml.XmlNamespaceManager($sheetXml.NameTable)
+      $sheetNs.AddNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
+      $rowNodes = $sheetXml.SelectNodes('/s:worksheet/s:sheetData/s:row', $sheetNs)
+      $processedRows = 0
+      foreach ($rowNode in $rowNodes) {
+        if ($processedRows -ge $MaxRows) { break }
+        $processedRows++
+        $cellA = $rowNode.SelectSingleNode("s:c[starts-with(@r,'A')]", $sheetNs)
+        $cellB = $rowNode.SelectSingleNode("s:c[starts-with(@r,'B')]", $sheetNs)
+        if (-not $cellA -or -not $cellB) { continue }
+        $a = (Get-XlsxCellText -CellNode $cellA -SharedStrings $sharedStrings -NamespaceManager $sheetNs).Trim()
+        $b = (Get-XlsxCellText -CellNode $cellB -SharedStrings $sharedStrings -NamespaceManager $sheetNs).Trim()
+        if ([string]::IsNullOrWhiteSpace($a) -or [string]::IsNullOrWhiteSpace($b)) { continue }
+        if (-not [string]::Equals($a, $currentUser, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+        $safeB = ($b -replace '[\\/:*?"<>|]', '_').Trim()
+        if ([string]::IsNullOrWhiteSpace($safeB)) { continue }
+        $path = Join-Path $rootPath $safeB
+        New-EnsuredPath $path
+        Write-Info "Benutzer '$currentUser' gefunden; Ordner '$safeB' wird bereitgestellt."
+        break
+      }
+    } finally {
+      if ($zip) { $zip.Dispose() }
+    }
+
+    Write-Info "Ordner fuer Pruefungskandidaten wurden mit XLSX-XML-Fallback angelegt."
     return $rootPath
   } catch {
-    throw "Excel-Datei konnte weder mit COM noch mit Python-Fallback verarbeitet werden: $($_.Exception.Message)"
+    throw "Excel-Datei konnte weder mit COM noch mit XLSX-XML-Fallback verarbeitet werden: $($_.Exception.Message)"
   }
 
   return $rootPath
