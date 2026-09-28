@@ -365,6 +365,7 @@ except ImportError:
 MAIN_NS = {'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 PACKAGE_NS = {'pkg': 'http://schemas.openxmlformats.org/package/2006/relationships'}
 REL_NS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id'
+NON_RECOVERABLE_ERRORS = (FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError)
 
 def load_shared_strings(archive):
     try:
@@ -449,7 +450,9 @@ def iter_rows(workbook_path, max_rows):
             finally:
                 wb.close()
             return
-        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        except Exception as exc:
+            if isinstance(exc, NON_RECOVERABLE_ERRORS):
+                raise
             print(f'openpyxl-Lesezugriff fehlgeschlagen, nutze ZIP/XML-Fallback: {exc}', file=sys.stderr)
     yield from iter_rows_with_zip(workbook_path, max_rows)
 
