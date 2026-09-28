@@ -361,7 +361,7 @@ function New-CandidateFoldersFromExcel {
     function Get-XlsxCellText {
       param(
         [Parameter(Mandatory)][System.Xml.XmlNode]$CellNode,
-        [Parameter(Mandatory)][string[]]$SharedStrings,
+        [AllowEmptyCollection()][string[]]$SharedStrings = @(),
         [Parameter(Mandatory)][System.Xml.XmlNamespaceManager]$NamespaceManager
       )
       $type = $CellNode.GetAttribute('t')
@@ -407,6 +407,9 @@ function New-CandidateFoldersFromExcel {
       $workbookUri = [System.Uri]::new('http://local/xl/workbook.xml')
       $sheetUri = [System.Uri]::new($workbookUri, $sheetTarget)
       $sheetEntryPath = $sheetUri.AbsolutePath.TrimStart('/')
+      if (-not $sheetEntryPath.StartsWith('xl/worksheets/', [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Ungueltiger Tabellenblatt-Pfad im XLSX: $sheetEntryPath"
+      }
 
       $sharedStrings = @()
       $sharedStringsEntry = $zip.GetEntry('xl/sharedStrings.xml')
@@ -437,19 +440,16 @@ function New-CandidateFoldersFromExcel {
         $cellB = $null
         $cellNodes = $rowNode.SelectNodes('s:c', $sheetNs)
         $hasReferencedCells = $false
-        $hasUnreferencedCells = $false
         foreach ($cellNode in $cellNodes) {
-          if ([string]::IsNullOrWhiteSpace($cellNode.GetAttribute('r'))) {
-            $hasUnreferencedCells = $true
-          } else {
+          if (-not [string]::IsNullOrWhiteSpace($cellNode.GetAttribute('r'))) {
             $hasReferencedCells = $true
           }
         }
-        if ($hasReferencedCells -and $hasUnreferencedCells) { continue }
 
         if ($hasReferencedCells) {
           foreach ($cellNode in $cellNodes) {
             $cellRef = $cellNode.GetAttribute('r')
+            if ([string]::IsNullOrWhiteSpace($cellRef)) { continue }
             $colMatch = [regex]::Match($cellRef, '^[A-Za-z]+')
             if (-not $colMatch.Success) { continue }
             $colName = $colMatch.Value.ToUpperInvariant()

@@ -185,12 +185,22 @@ def test_excel_fallback_reads_shared_strings_from_relationship_sheet() -> None:
         assert 'Max Mustermann' in created_folders
 
 
-def test_excel_fallback_uses_embedded_xlsx_xml_reader() -> None:
-    script = (ROOT / 'src' / 'AP1-Konfigurator.ps1').read_text(encoding='utf-8')
+def test_excel_fallback_reads_inline_strings_from_a_b_columns() -> None:
+    with TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        xlsx_path = temp_path / 'AP1-TN.xlsx'
+        username = getpass.getuser()
+        candidate = 'Inline Kandidat'
+        _create_minimal_inline_xlsx(
+            xlsx_path,
+            first_cell_ref='A1',
+            second_cell_ref='B1',
+            username=username,
+            candidate=candidate,
+        )
 
-    assert 'System.IO.Compression.ZipFile' in script
-    assert 'sharedStrings.xml' in script
-    assert 'XLSX-XML-Fallback' in script
+        created_folders = _run_fallback_function_in_pwsh(xlsx_path, temp_path / 'runtime')
+        assert candidate in created_folders
 
 
 def test_excel_fallback_no_longer_installs_openpyxl() -> None:
