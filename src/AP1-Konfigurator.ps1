@@ -353,7 +353,7 @@ function New-CandidateFoldersFromExcel {
   }
 
   $pythonScript = @"
-import os, re, zipfile, posixpath
+import os, re, sys, zipfile, posixpath
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -449,8 +449,8 @@ def iter_rows(workbook_path, max_rows):
             finally:
                 wb.close()
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f'openpyxl-Lesezugriff fehlgeschlagen, nutze ZIP/XML-Fallback: {exc}', file=sys.stderr)
     yield from iter_rows_with_zip(workbook_path, max_rows)
 
 wb_path = Path(r'$WorkbookPath')

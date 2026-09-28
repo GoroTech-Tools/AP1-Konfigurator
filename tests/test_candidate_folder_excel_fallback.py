@@ -156,6 +156,7 @@ builtins.__import__ = _patched_import
 
     assert result.returncode == 0, result.stderr
     assert (root_path / 'Kandidat Zwei').is_dir()
+    assert 'openpyxl-Lesezugriff fehlgeschlagen' in result.stderr
 
 
 def test_fallback_script_no_longer_installs_openpyxl_at_runtime() -> None:
