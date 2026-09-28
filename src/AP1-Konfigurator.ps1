@@ -484,6 +484,7 @@ function Set-TaskbarSettings {
   Write-Info "Setze Taskbar: Alignment=$Alignment, Search=$Search"
   Set-RegistryValues -RegPath $regAdv -Settings @{
     'TaskbarAl' = $taskbarValue
+    'TaskbarAI' = 0
     'TaskbarGlomLevel' = 2
   }
   Set-RegistryValues -RegPath $regSea -Settings @{ 'SearchboxTaskbarMode' = $searchValue }

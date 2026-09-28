@@ -9,6 +9,10 @@ def test_taskbar_glom_level_is_configured() -> None:
     ps1 = (ROOT / 'src' / 'AP1-Konfigurator.ps1').read_text(encoding='utf-8')
     module = (ROOT / 'src' / 'Skript-Module' / 'AP1-System.psm1').read_text(encoding='utf-8')
 
+    assert "TaskbarAI" in ps1
+    assert "TaskbarAI" in module
+    assert "= 0" in ps1
+    assert "= 0" in module
     assert "TaskbarGlomLevel" in ps1
     assert "TaskbarGlomLevel" in module
     assert "= 2" in ps1
