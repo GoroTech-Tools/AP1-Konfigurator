@@ -138,8 +138,9 @@ def iter_rows_with_zip(workbook_path, max_rows):
                     break
                 first_value = ''
                 second_value = ''
-                for cell in row.findall('main:c', MAIN_NS):
-                    index = column_index(cell.attrib.get('r', ''))
+                for ordinal, cell in enumerate(row.findall('main:c', MAIN_NS), start=1):
+                    reference = cell.attrib.get('r', '')
+                    index = column_index(reference) if reference else ordinal
                     if index == 1:
                         first_value = cell_text(cell, shared_strings)
                     elif index == 2:

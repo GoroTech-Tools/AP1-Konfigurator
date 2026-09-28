@@ -31,7 +31,17 @@ def _python_literal(path: Path) -> str:
     return str(path).replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _create_minimal_xlsx(path: Path, username: str, folder_name: str) -> None:
+def _create_minimal_xlsx(path: Path, username: str, folder_name: str, *, include_cell_refs: bool = True) -> None:
+    first_row = (
+        '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
+        if include_cell_refs
+        else '<row r="1"><c t="s"><v>0</v></c><c t="s"><v>1</v></c></row>'
+    )
+    second_row = (
+        '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="s"><v>3</v></c></row>'
+        if include_cell_refs
+        else '<row r="2"><c t="s"><v>2</v></c><c t="s"><v>3</v></c></row>'
+    )
     with zipfile.ZipFile(path, 'w') as archive:
         archive.writestr(
             '[Content_Types].xml',
@@ -73,11 +83,11 @@ def _create_minimal_xlsx(path: Path, username: str, folder_name: str) -> None:
         )
         archive.writestr(
             'xl/worksheets/sheet1.xml',
-            """<?xml version="1.0" encoding="UTF-8"?>
+            f"""<?xml version="1.0" encoding="UTF-8"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetData>
-    <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>
-    <row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" t="s"><v>3</v></c></row>
+    {first_row}
+    {second_row}
   </sheetData>
 </worksheet>""",
         )
@@ -157,6 +167,45 @@ builtins.__import__ = _patched_import
     assert result.returncode == 0, result.stderr
     assert (root_path / 'Kandidat Zwei').is_dir()
     assert 'openpyxl-Lesezugriff fehlgeschlagen' in result.stderr
+
+
+def test_excel_python_fallback_reads_cells_without_references(tmp_path: Path) -> None:
+    script = _extract_python_fallback(ROOT / 'src' / 'AP1-Konfigurator.ps1')
+    workbook = tmp_path / 'AP1-TN.xlsx'
+    root_path = tmp_path / 'Ordner'
+    _create_minimal_xlsx(
+        workbook,
+        username='candidate.user',
+        folder_name='Kandidat Vier',
+        include_cell_refs=False,
+    )
+
+    script = script.replace("$WorkbookPath", _python_literal(workbook))
+    script = script.replace("$rootPath", _python_literal(root_path))
+    script = script.replace("$MaxRows", "10")
+
+    blocker = """
+import builtins
+_real_import = builtins.__import__
+def _blocked_import(name, *args, **kwargs):
+    if name == 'openpyxl':
+        raise ImportError('blocked by test')
+    return _real_import(name, *args, **kwargs)
+builtins.__import__ = _blocked_import
+"""
+
+    env = os.environ.copy()
+    env['USERNAME'] = 'candidate.user'
+    result = subprocess.run(
+        [sys.executable, '-c', blocker + script],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (root_path / 'Kandidat Vier').is_dir()
 
 
 def test_excel_python_fallback_does_not_hide_unexpected_openpyxl_errors(tmp_path: Path) -> None:
