@@ -143,16 +143,19 @@ def iter_rows_with_zip(workbook_path, max_rows):
 
 def iter_rows(workbook_path, max_rows):
     if openpyxl is not None:
-        wb = openpyxl.load_workbook(workbook_path, read_only=True, data_only=True)
         try:
-            ws = wb.worksheets[0]
-            for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, max_rows), values_only=True):
-                if len(row) < 2:
-                    continue
-                yield row[0], row[1]
-        finally:
-            wb.close()
-        return
+            wb = openpyxl.load_workbook(workbook_path, read_only=True, data_only=True)
+            try:
+                ws = wb.worksheets[0]
+                for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, max_rows), values_only=True):
+                    if len(row) < 2:
+                        continue
+                    yield row[0], row[1]
+            finally:
+                wb.close()
+            return
+        except Exception:
+            pass
     yield from iter_rows_with_zip(workbook_path, max_rows)
 
 wb_path = Path(r'$WorkbookPath')
