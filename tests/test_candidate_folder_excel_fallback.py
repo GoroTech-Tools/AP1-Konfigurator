@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 import zipfile
@@ -12,9 +11,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _extract_python_fallback(script_path: Path) -> str:
     source = script_path.read_text(encoding='utf-8')
-    match = re.search(r'\$pythonScript = @"\n(.*?)\n"@', source, re.DOTALL)
-    assert match, f'Python-Fallback nicht gefunden in {script_path}'
-    return match.group(1)
+    start_marker = '$pythonScript = @"'
+    start = source.find(start_marker)
+    assert start >= 0, f'Python-Fallback-Start nicht gefunden in {script_path}'
+    start += len(start_marker)
+    if start < len(source) and source[start] == '\r':
+        start += 1
+    if start < len(source) and source[start] == '\n':
+        start += 1
+
+    end = source.find('\n"@', start)
+    if end < 0:
+        end = source.find('\r\n"@', start)
+    assert end >= 0, f'Python-Fallback-Ende nicht gefunden in {script_path}'
+    return source[start:end]
 
 
 def _python_literal(path: Path) -> str:
