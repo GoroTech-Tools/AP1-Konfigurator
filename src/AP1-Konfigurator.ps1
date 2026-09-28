@@ -365,6 +365,7 @@ except ImportError:
 MAIN_NS = {'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 PACKAGE_NS = {'pkg': 'http://schemas.openxmlformats.org/package/2006/relationships'}
 REL_NS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id'
+ROW_TAG = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}row'
 NON_RECOVERABLE_ERRORS = (FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError)
 
 def load_shared_strings(archive):
@@ -421,21 +422,24 @@ def iter_rows_with_zip(workbook_path, max_rows):
     with zipfile.ZipFile(workbook_path) as archive:
         shared_strings = load_shared_strings(archive)
         sheet_path = resolve_first_sheet_path(archive)
-        worksheet = ET.fromstring(archive.read(sheet_path))
-    row_count = 0
-    for row in worksheet.findall('.//main:sheetData/main:row', MAIN_NS):
-        row_count += 1
-        if row_count > max_rows:
-            break
-        first_value = ''
-        second_value = ''
-        for cell in row.findall('main:c', MAIN_NS):
-            index = column_index(cell.attrib.get('r', ''))
-            if index == 1:
-                first_value = cell_text(cell, shared_strings)
-            elif index == 2:
-                second_value = cell_text(cell, shared_strings)
-        yield first_value, second_value
+        with archive.open(sheet_path) as worksheet:
+            row_count = 0
+            for _, row in ET.iterparse(worksheet, events=('end',)):
+                if row.tag != ROW_TAG:
+                    continue
+                row_count += 1
+                if row_count > max_rows:
+                    break
+                first_value = ''
+                second_value = ''
+                for cell in row.findall('main:c', MAIN_NS):
+                    index = column_index(cell.attrib.get('r', ''))
+                    if index == 1:
+                        first_value = cell_text(cell, shared_strings)
+                    elif index == 2:
+                        second_value = cell_text(cell, shared_strings)
+                row.clear()
+                yield first_value, second_value
 
 def iter_rows(workbook_path, max_rows):
     if openpyxl is not None:
