@@ -31,7 +31,7 @@ Dabei werden insbesondere vorbereitet:
 - Windows-PC mit Microsoft Office (Word und Excel) für die spätere Nutzung
 - Schreibrechte im Benutzerprofil
 - vorhandene Teilnehmerliste unter `data/1. Anpassen\AP1-TN.xlsx`
-- Python-Abhängigkeit `openpyxl` für die Excel-Auswertung
+- vorhandene Python-Laufzeit (`python` oder `py`) nur dann, wenn der Excel-COM-Zugriff nicht verfügbar ist
 - optional Internetzugang, falls keine lokale Nuera-Datei vorhanden ist
 
 ## Vorbereitung
@@ -66,7 +66,7 @@ Das Skript führt typischerweise folgende Schritte aus:
 2. Nuera-Ordner auf dem Desktop bereitstellen
 3. Office-Einstellungen über die Registry setzen
 4. Vorlagen `Normal.dotm` und `Mappe.xltx` kopieren
-5. Teilnehmerliste mit `openpyxl` lesen
+5. Teilnehmerliste per Excel-COM oder Python-Fallback lesen
 6. Anmeldenamen in Spalte A suchen und genau den Ordnernamen aus Spalte B auf dem Desktop anlegen
 7. Word- und Excel-Speicherpfade auf diesen Benutzerordner setzen
 8. Taskleisten- und optional Proxy-Einstellungen anwenden
@@ -76,6 +76,7 @@ Hinweise während der Ausführung:
 
 - Im Standardbetrieb werden Word und Excel nicht per COM gestartet.
 - Der COM-Modus ist nur mit `-UseCom` aktiv.
+- Falls Excel-COM nicht verfügbar ist, liest der Python-Fallback `AP1-TN.xlsx` auch ohne zusätzlich installiertes `openpyxl`.
 - Eine vorhandene gültige Nuera wird lokal verwendet; ein Download erfolgt nur bei fehlendem Bestand.
 - Die GUI zeigt den Fortschritt laufend an; bei erfolgreichem Ende wird der Balken grün und mit `Fertig` beschriftet.
 

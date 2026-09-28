@@ -32,7 +32,7 @@ function New-CandidateFoldersFromExcel {
 		Write-Info "Ordner fuer Pruefungskandidaten wurden angelegt."
 		return $rootPath
 	} catch {
-		Write-Warning "Excel-COM-Lesezugriff fehlgeschlagen: $($_.Exception.Message) - nutze Python/pyopenxl-Fallback."
+		Write-Warning "Excel-COM-Lesezugriff fehlgeschlagen: $($_.Exception.Message) - nutze Python-Fallback."
 	} finally {
 		if ($wb) { 
 			try { $wb.Close($false) | Out-Null } catch {}
@@ -57,21 +57,103 @@ function New-CandidateFoldersFromExcel {
 		throw "Excel-Datei konnte nicht verarbeitet werden: Weder COM noch Python/py verfügbar."
 	}
 
-	try {
-		& $pythonCommand -c "import openpyxl" | Out-Null
-		if ($LASTEXITCODE -ne 0) { throw "missing openpyxl" }
-	} catch {
-		Write-Info "openpyxl fehlt; installiere Python-Abhaengigkeit..."
-		& $pythonCommand -m pip install openpyxl
-		if ($LASTEXITCODE -ne 0) {
-			throw "openpyxl konnte nicht installiert werden."
-		}
-	}
-
 	$pythonScript = @"
-import os, re, sys
+import os, re, zipfile, posixpath
 from pathlib import Path
-import openpyxl
+from xml.etree import ElementTree as ET
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+MAIN_NS = {'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+PACKAGE_NS = {'pkg': 'http://schemas.openxmlformats.org/package/2006/relationships'}
+REL_NS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id'
+
+def load_shared_strings(archive):
+    try:
+        root = ET.fromstring(archive.read('xl/sharedStrings.xml'))
+    except KeyError:
+        return []
+    values = []
+    for item in root.findall('main:si', MAIN_NS):
+        values.append(''.join(node.text or '' for node in item.findall('.//main:t', MAIN_NS)))
+    return values
+
+def resolve_first_sheet_path(archive):
+    workbook = ET.fromstring(archive.read('xl/workbook.xml'))
+    relationships = ET.fromstring(archive.read('xl/_rels/workbook.xml.rels'))
+    first_sheet = workbook.find('main:sheets/main:sheet', MAIN_NS)
+    if first_sheet is None:
+        raise RuntimeError('Keine Tabellenblaetter in der Excel-Datei gefunden.')
+    rel_id = first_sheet.attrib.get(REL_NS)
+    for relation in relationships.findall('pkg:Relationship', PACKAGE_NS):
+        if relation.attrib.get('Id') != rel_id:
+            continue
+        target = relation.attrib.get('Target', '')
+        if not target:
+            break
+        if target.startswith('/'):
+            return target.lstrip('/')
+        return posixpath.normpath(posixpath.join('xl', target))
+    raise RuntimeError('Erstes Tabellenblatt konnte in der Excel-Datei nicht aufgeloest werden.')
+
+def column_index(cell_reference):
+    letters = ''.join(ch for ch in cell_reference if ch.isalpha()).upper()
+    value = 0
+    for letter in letters:
+        value = (value * 26) + (ord(letter) - ord('A') + 1)
+    return value
+
+def cell_text(cell, shared_strings):
+    cell_type = cell.attrib.get('t')
+    if cell_type == 'inlineStr':
+        return ''.join(node.text or '' for node in cell.findall('.//main:t', MAIN_NS))
+    value_node = cell.find('main:v', MAIN_NS)
+    if value_node is None or value_node.text is None:
+        return ''
+    value = value_node.text
+    if cell_type == 's':
+        try:
+            return shared_strings[int(value)]
+        except (ValueError, IndexError):
+            return ''
+    return value
+
+def iter_rows_with_zip(workbook_path, max_rows):
+    with zipfile.ZipFile(workbook_path) as archive:
+        shared_strings = load_shared_strings(archive)
+        sheet_path = resolve_first_sheet_path(archive)
+        worksheet = ET.fromstring(archive.read(sheet_path))
+    row_count = 0
+    for row in worksheet.findall('.//main:sheetData/main:row', MAIN_NS):
+        row_count += 1
+        if row_count > max_rows:
+            break
+        first_value = ''
+        second_value = ''
+        for cell in row.findall('main:c', MAIN_NS):
+            index = column_index(cell.attrib.get('r', ''))
+            if index == 1:
+                first_value = cell_text(cell, shared_strings)
+            elif index == 2:
+                second_value = cell_text(cell, shared_strings)
+        yield first_value, second_value
+
+def iter_rows(workbook_path, max_rows):
+    if openpyxl is not None:
+        wb = openpyxl.load_workbook(workbook_path, read_only=True, data_only=True)
+        try:
+            ws = wb.worksheets[0]
+            for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, max_rows), values_only=True):
+                if len(row) < 2:
+                    continue
+                yield row[0], row[1]
+        finally:
+            wb.close()
+        return
+    yield from iter_rows_with_zip(workbook_path, max_rows)
 
 wb_path = Path(r'$WorkbookPath')
 root_path = Path(r'$rootPath')
@@ -84,22 +166,17 @@ for child in root_path.iterdir():
 		child.unlink()
 current_user = os.environ.get('USERNAME', '').strip().casefold()
 
-wb = openpyxl.load_workbook(wb_path, read_only=True, data_only=True)
-ws = wb.worksheets[0]
-for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, $MaxRows), values_only=True):
-    if len(row) < 2:
-        continue
-    a = '' if row[0] is None else str(row[0]).strip()
-    b = '' if row[1] is None else str(row[1]).strip()
-	if not a or not b or a.casefold() != current_user:
+for first_value, second_value in iter_rows(wb_path, $MaxRows):
+    a = '' if first_value is None else str(first_value).strip()
+    b = '' if second_value is None else str(second_value).strip()
+    if not a or not b or a.casefold() != current_user:
         continue
     safe_b = re.sub(r'[\\/:*?\"<>|]', '_', b).strip()
-	if not safe_b:
+    if not safe_b:
         continue
-	(root_path / safe_b).mkdir(parents=True, exist_ok=True)
-	break
+    (root_path / safe_b).mkdir(parents=True, exist_ok=True)
+    break
 
-wb.close()
 print(f'Python-Excel-Fallback: Ordner angelegt unter {root_path}')
 "@
 

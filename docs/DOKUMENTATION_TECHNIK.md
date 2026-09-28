@@ -108,13 +108,14 @@ Unterstützte Parameter:
 ### COM-Fallback
 
 - Im Standardbetrieb werden Office-Einstellungen über Registry und Dateikopie gesetzt; Word/Excel-COM wird nicht gestartet.
-- Die Excel-Teilnehmerliste wird im Standardbetrieb mit `openpyxl` gelesen.
+- Die Excel-Teilnehmerliste wird bevorzugt per COM gelesen und im Fehlerfall über einen Python-Fallback verarbeitet.
 - COM bleibt als optionaler Kompatibilitätsmodus über `-UseCom` verfügbar.
 - Mit `-RegistryOnly` kann der COM-freie Modus zusätzlich explizit erzwungen werden.
 
 ### Excel-/CSV-Fallback
 
 - Primärquelle ist `data/1. Anpassen\AP1-TN.xlsx`.
+- Der Python-Fallback nutzt bevorzugt `openpyxl`, kann die XLSX-Datei bei fehlender Bibliothek aber auch direkt über ZIP/XML auslesen.
 - Wenn Excel/COM nicht verfügbar ist, kann mit `-CsvFallbackPath` auf CSV ausgewichen werden.
 - Erwartet werden verwertbare Werte in den ersten beiden Spalten bzw. CSV-Feldern `Account` und `Kandidat`.
 
