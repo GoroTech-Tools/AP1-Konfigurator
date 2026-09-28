@@ -1,6 +1,6 @@
 # DOKUMENTATION ANWENDER
 
-Aktueller Stand: **v1.0.41** · Letzte Aktualisierung: **28. September 2026**
+Aktueller Stand: **v1.0.42** · Letzte Aktualisierung: **28. September 2026**
 
 ## Inhaltsverzeichnis
 
