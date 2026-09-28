@@ -159,6 +159,44 @@ builtins.__import__ = _patched_import
     assert 'openpyxl-Lesezugriff fehlgeschlagen' in result.stderr
 
 
+def test_excel_python_fallback_does_not_hide_unexpected_openpyxl_errors(tmp_path: Path) -> None:
+    script = _extract_python_fallback(ROOT / 'src' / 'AP1-Konfigurator.ps1')
+    workbook = tmp_path / 'AP1-TN.xlsx'
+    root_path = tmp_path / 'Ordner'
+    _create_minimal_xlsx(workbook, username='candidate.user', folder_name='Kandidat Drei')
+
+    script = script.replace("$WorkbookPath", _python_literal(workbook))
+    script = script.replace("$rootPath", _python_literal(root_path))
+    script = script.replace("$MaxRows", "10")
+
+    broken_openpyxl = """
+import builtins
+import types
+import sys
+_real_import = builtins.__import__
+def _patched_import(name, *args, **kwargs):
+    if name == 'openpyxl':
+        module = types.ModuleType('openpyxl')
+        sys.modules[name] = module
+        return module
+    return _real_import(name, *args, **kwargs)
+builtins.__import__ = _patched_import
+"""
+
+    env = os.environ.copy()
+    env['USERNAME'] = 'candidate.user'
+    result = subprocess.run(
+        [sys.executable, '-c', broken_openpyxl + script],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert not (root_path / 'Kandidat Drei').exists()
+
+
 def test_fallback_script_no_longer_installs_openpyxl_at_runtime() -> None:
     main_script = (ROOT / 'src' / 'AP1-Konfigurator.ps1').read_text(encoding='utf-8')
     module_script = (ROOT / 'src' / 'Skript-Module' / 'AP1-Folders.psm1').read_text(encoding='utf-8')
