@@ -433,8 +433,28 @@ function New-CandidateFoldersFromExcel {
       foreach ($rowNode in $rowNodes) {
         if ($processedRows -ge $MaxRows) { break }
         $processedRows++
-        $cellA = $rowNode.SelectSingleNode("s:c[starts-with(@r,'A')]", $sheetNs)
-        $cellB = $rowNode.SelectSingleNode("s:c[starts-with(@r,'B')]", $sheetNs)
+        $cellA = $null
+        $cellB = $null
+        $ordinalIndex = 0
+        $cellNodes = $rowNode.SelectNodes('s:c', $sheetNs)
+        foreach ($cellNode in $cellNodes) {
+          $cellRef = $cellNode.GetAttribute('r')
+          if ([string]::IsNullOrWhiteSpace($cellRef)) {
+            if ($ordinalIndex -eq 0 -and -not $cellA) {
+              $cellA = $cellNode
+            } elseif ($ordinalIndex -eq 1 -and -not $cellB) {
+              $cellB = $cellNode
+            }
+            $ordinalIndex++
+            continue
+          }
+          $colMatch = [regex]::Match($cellRef, '^[A-Za-z]+')
+          if (-not $colMatch.Success) { continue }
+          $colName = $colMatch.Value.ToUpperInvariant()
+          if ($colName -eq 'A' -and -not $cellA) { $cellA = $cellNode; continue }
+          if ($colName -eq 'B' -and -not $cellB) { $cellB = $cellNode; continue }
+          if ($cellA -and $cellB) { break }
+        }
         if (-not $cellA -or -not $cellB) { continue }
         $a = (Get-XlsxCellText -CellNode $cellA -SharedStrings $sharedStrings -NamespaceManager $sheetNs).Trim()
         $b = (Get-XlsxCellText -CellNode $cellB -SharedStrings $sharedStrings -NamespaceManager $sheetNs).Trim()
