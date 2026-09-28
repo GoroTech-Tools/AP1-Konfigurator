@@ -154,6 +154,7 @@ function Remove-EmptyCandidateRoot {
 function Copy-CandidateFolderToDesktop {
 	param([string]$SourceRoot)
 	$desktop = Get-DesktopPath
+	New-EnsuredPath $desktop
 	if (-not (Test-Path $SourceRoot)) {
 		Write-Warning "Quellordner fuer Kandidaten existiert nicht: $SourceRoot"
 		return
@@ -191,7 +192,23 @@ function Join-PathSafe {
 	$result = $result -replace 'NÃ¼', 'Nü' -replace 'Ã¤', 'ä' -replace 'Ã¶', 'ö' -replace 'ÃÖ', 'Ö' -replace 'ÃŸ', 'ß'
 	return $result
 }
-function Get-DesktopPath { [Environment]::GetFolderPath('Desktop') }
+function Get-DesktopPath {
+	$desktop = [Environment]::GetFolderPath('Desktop')
+	if (-not [string]::IsNullOrWhiteSpace($desktop)) { return $desktop }
+
+	$userProfile = [Environment]::GetFolderPath('UserProfile')
+	if ([string]::IsNullOrWhiteSpace($userProfile)) { $userProfile = $env:USERPROFILE }
+	if ([string]::IsNullOrWhiteSpace($userProfile)) {
+		throw 'Desktop-Pfad konnte nicht ermittelt werden (UserProfile fehlt).'
+	}
+
+	$fallbackDesktop = Join-Path $userProfile 'Desktop'
+	if (-not (Test-Path $fallbackDesktop)) {
+		New-Item -Path $fallbackDesktop -ItemType Directory -Force | Out-Null
+	}
+	Write-Warning "Desktop-Pfad aus GetFolderPath war leer; fallback auf: $fallbackDesktop"
+	return $fallbackDesktop
+}
 
 # Alle Funktionsdefinitionen bleiben unverändert
 Export-ModuleMember -Function New-CandidateFoldersFromExcel,New-CandidateFoldersFromCsv,Copy-CandidateFolderToDesktop,Remove-EmptyCandidateRoot,New-EnsuredPath,Join-PathSafe,Get-DesktopPath
