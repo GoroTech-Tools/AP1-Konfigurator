@@ -9,8 +9,32 @@ ROOT = Path(__file__).resolve().parents[1]
 def _extract_brace_block(source: str, block_start: int) -> str:
     depth = 0
     body_start = None
+    in_single = False
+    in_double = False
+    in_comment = False
     for index in range(block_start, len(source)):
         char = source[index]
+        if in_comment:
+            if char == '\n':
+                in_comment = False
+            continue
+        if in_single:
+            if char == "'":
+                in_single = False
+            continue
+        if in_double:
+            if char == '"' and (index == 0 or source[index - 1] != '`'):
+                in_double = False
+            continue
+        if char == '#':
+            in_comment = True
+            continue
+        if char == "'":
+            in_single = True
+            continue
+        if char == '"':
+            in_double = True
+            continue
         if char == '{':
             depth += 1
             if depth == 1:
@@ -37,7 +61,12 @@ def test_desktop_quick_access_function_is_integrated() -> None:
         re.IGNORECASE | re.MULTILINE,
     )
 
-    use_com_match = re.search(r'if\s*\(\$UseCom\)\s*\{', script, re.IGNORECASE)
-    assert use_com_match is not None
-    use_com_body = _extract_brace_block(script, use_com_match.start())
-    assert re.search(r'^\s*(?:try\s*\{\s*)?Add-DesktopToQuickAccess\b', use_com_body, re.IGNORECASE | re.MULTILINE)
+    use_com_matches = re.finditer(r'if\s*\(\$UseCom\)\s*\{', script, re.IGNORECASE)
+    assert any(
+        re.search(
+            r'^\s*(?:try\s*\{\s*)?Add-DesktopToQuickAccess\b',
+            _extract_brace_block(script, match.start()),
+            re.IGNORECASE | re.MULTILINE,
+        )
+        for match in use_com_matches
+    )
