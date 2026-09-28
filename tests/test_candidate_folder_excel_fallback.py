@@ -136,7 +136,7 @@ def _patched_import(name, *args, **kwargs):
     if name == 'openpyxl':
         module = types.ModuleType('openpyxl')
         def _load_workbook(*_args, **_kwargs):
-            raise RuntimeError('simulated openpyxl failure')
+            raise ValueError('simulated openpyxl failure')
         module.load_workbook = _load_workbook
         sys.modules[name] = module
         return module
