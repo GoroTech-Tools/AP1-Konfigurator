@@ -431,11 +431,9 @@ function New-CandidateFoldersFromExcel {
       [xml]$sheetXml = Get-XlsxEntryText -Archive $zip -EntryPath $sheetEntryPath
       $sheetNs = New-Object System.Xml.XmlNamespaceManager($sheetXml.NameTable)
       $sheetNs.AddNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
-      $rowNodes = $sheetXml.SelectNodes('/s:worksheet/s:sheetData/s:row', $sheetNs)
-      $processedRows = 0
+      $rowXPath = "/s:worksheet/s:sheetData/s:row[position()<=${MaxRows}]"
+      $rowNodes = $sheetXml.SelectNodes($rowXPath, $sheetNs)
       foreach ($rowNode in $rowNodes) {
-        if ($processedRows -ge $MaxRows) { break }
-        $processedRows++
         $cellA = $null
         $cellB = $null
         $cellNodes = $rowNode.SelectNodes('s:c', $sheetNs)
