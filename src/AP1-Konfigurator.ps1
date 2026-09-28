@@ -8,7 +8,9 @@ param(
   [int]$MaxRows = 500,
   [switch]$Quiet,
   [switch]$RegistryOnly,
-  [switch]$UseCom
+  [switch]$UseCom,
+  [switch]$SortAlphabetically,
+  [switch]$SortDryRun
 )
 
 $script:AppVersion = '1.0.30'
@@ -66,7 +68,7 @@ try {
 
 # Optionaler Komfortschritt; der stabile Standardbetrieb benoetigt kein Shell-COM.
 if ($UseCom) {
-  try { Add-DesktopToQuickAccess } catch { Write-Warning "Schnellzugriff konnte nicht per COM gesetzt werden: $($_.Exception.Message)" }
+  try { Add-DesktopToQuickAccess -SortAlphabetically:$SortAlphabetically -SortDryRun:$SortDryRun } catch { Write-Warning "Schnellzugriff konnte nicht per COM gesetzt werden: $($_.Exception.Message)" }
 } else {
   Write-Info "Registry-only-Modus aktiv: Office-/Shell-COM wird nicht verwendet."
 }
