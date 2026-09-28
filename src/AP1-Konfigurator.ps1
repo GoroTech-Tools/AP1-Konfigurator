@@ -435,26 +435,33 @@ function New-CandidateFoldersFromExcel {
         $processedRows++
         $cellA = $null
         $cellB = $null
-        $ordinalIndex = 0
         $cellNodes = $rowNode.SelectNodes('s:c', $sheetNs)
+        $hasReferencedCells = $false
+        $hasUnreferencedCells = $false
         foreach ($cellNode in $cellNodes) {
-          $cellRef = $cellNode.GetAttribute('r')
-          if ([string]::IsNullOrWhiteSpace($cellRef)) {
-            if ($ordinalIndex -eq 0 -and -not $cellA) {
-              $cellA = $cellNode
-            } elseif ($ordinalIndex -eq 1 -and -not $cellB) {
-              $cellB = $cellNode
-            }
-            $ordinalIndex++
-            continue
+          if ([string]::IsNullOrWhiteSpace($cellNode.GetAttribute('r'))) {
+            $hasUnreferencedCells = $true
+          } else {
+            $hasReferencedCells = $true
           }
-          $colMatch = [regex]::Match($cellRef, '^[A-Za-z]+')
-          if (-not $colMatch.Success) { continue }
-          $colName = $colMatch.Value.ToUpperInvariant()
-          if ($colName -eq 'A' -and -not $cellA) { $cellA = $cellNode; continue }
-          if ($colName -eq 'B' -and -not $cellB) { $cellB = $cellNode; continue }
-          if ($cellA -and $cellB) { break }
         }
+        if ($hasReferencedCells -and $hasUnreferencedCells) { continue }
+
+        if ($hasReferencedCells) {
+          foreach ($cellNode in $cellNodes) {
+            $cellRef = $cellNode.GetAttribute('r')
+            $colMatch = [regex]::Match($cellRef, '^[A-Za-z]+')
+            if (-not $colMatch.Success) { continue }
+            $colName = $colMatch.Value.ToUpperInvariant()
+            if ($colName -eq 'A' -and -not $cellA) { $cellA = $cellNode; continue }
+            if ($colName -eq 'B' -and -not $cellB) { $cellB = $cellNode; continue }
+            if ($cellA -and $cellB) { break }
+          }
+        } else {
+          if ($cellNodes.Count -ge 1) { $cellA = $cellNodes[0] }
+          if ($cellNodes.Count -ge 2) { $cellB = $cellNodes[1] }
+        }
+
         if (-not $cellA -or -not $cellB) { continue }
         $a = (Get-XlsxCellText -CellNode $cellA -SharedStrings $sharedStrings -NamespaceManager $sheetNs).Trim()
         $b = (Get-XlsxCellText -CellNode $cellB -SharedStrings $sharedStrings -NamespaceManager $sheetNs).Trim()
