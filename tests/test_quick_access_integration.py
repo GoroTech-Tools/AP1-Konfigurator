@@ -31,9 +31,13 @@ def test_desktop_quick_access_function_is_integrated() -> None:
     function_body = _extract_brace_block(module, function_match.start())
     assert re.search(r"GetFolderPath\((\"|')Desktop(\"|')\)", function_body, re.IGNORECASE)
 
-    assert re.search(r'Export-ModuleMember[\s\S]*Add-DesktopToQuickAccess', module, re.IGNORECASE)
+    assert re.search(
+        r'^\s*Export-ModuleMember\s+-Function\s+[^\r\n#]*\bAdd-DesktopToQuickAccess\b',
+        module,
+        re.IGNORECASE | re.MULTILINE,
+    )
 
     use_com_match = re.search(r'if\s*\(\$UseCom\)\s*\{', script, re.IGNORECASE)
     assert use_com_match is not None
     use_com_body = _extract_brace_block(script, use_com_match.start())
-    assert re.search(r'Add-DesktopToQuickAccess', use_com_body, re.IGNORECASE)
+    assert re.search(r'^\s*(?:try\s*\{\s*)?Add-DesktopToQuickAccess\b', use_com_body, re.IGNORECASE | re.MULTILINE)
