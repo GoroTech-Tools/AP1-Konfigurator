@@ -66,15 +66,6 @@ try {
     Write-Warning "Konnte PersonalTemplates nicht setzen: $($_.Exception.Message)"
 }
 
-# Optionaler Komfortschritt; der stabile Standardbetrieb benoetigt kein Shell-COM.
-if ($UseCom) {
-  try { Add-DesktopToQuickAccess -SortAlphabetically:$SortAlphabetically -SortDryRun:$SortDryRun } catch { Write-Warning "Schnellzugriff konnte nicht per COM gesetzt werden: $($_.Exception.Message)" }
-} else {
-  Write-Info "Registry-only-Modus aktiv: Office-/Shell-COM wird nicht verwendet."
-}
-
-
-
 # === Desktop-Verknüpfung ausblenden (optional) ===
 # $shortcutName = Read-Host 'Name der auszublendenden Desktop-Verknüpfung (ohne .lnk)'
 # $antwort = Read-Host "Soll die Verknüpfung '$shortcutName' wirklich ausgeblendet werden? (J/N)"
@@ -594,7 +585,9 @@ function Start-AP1Konfiguration {
         [int]$MaxRows = 500,
         [switch]$Quiet,
         [switch]$RegistryOnly,
-        [switch]$UseCom
+        [switch]$UseCom,
+        [switch]$SortAlphabetically,
+        [switch]$SortDryRun
     )
 
     try {
@@ -602,6 +595,13 @@ function Start-AP1Konfiguration {
           Write-SafeOutput "Dieses Skript richtet den Pruefungsrechner fuer die AP 1 ein." -ForegroundColor Yellow
         $desktopPath = Get-DesktopPath
           Write-Info "[DEBUG] DesktopPath: $desktopPath"
+        if (-not $RegistryOnly) {
+            try {
+                Add-DesktopToQuickAccess -SortAlphabetically:$SortAlphabetically -SortDryRun:$SortDryRun
+            } catch {
+                Write-Warning "Schnellzugriff konnte nicht per COM gesetzt werden: $($_.Exception.Message)"
+            }
+        }
         # COM-Autodetektion
         $comOkWord = $false
         $comOkExcel = $false
@@ -771,6 +771,8 @@ function Main {
       Quiet           = $Quiet
       RegistryOnly    = $RegistryOnly
       UseCom          = $UseCom
+      SortAlphabetically = $SortAlphabetically
+      SortDryRun      = $SortDryRun
     }
     Start-AP1Konfiguration @startParams
 }

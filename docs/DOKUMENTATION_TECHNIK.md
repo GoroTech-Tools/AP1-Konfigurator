@@ -109,8 +109,8 @@ Unterstützte Parameter:
 
 - Im Standardbetrieb werden Office-Einstellungen über Registry und Dateikopie gesetzt; Word/Excel-COM wird nicht gestartet.
 - Die Excel-Teilnehmerliste wird im Standardbetrieb mit `openpyxl` gelesen.
-- COM bleibt als optionaler Kompatibilitätsmodus über `-UseCom` verfügbar.
-- Mit `-RegistryOnly` kann der COM-freie Modus zusätzlich explizit erzwungen werden.
+- `-UseCom` aktiviert optional Word/Excel-COM; das Anheften des Desktops im Schnellzugriff nutzt Shell-COM bereits im Standardbetrieb.
+- Mit `-RegistryOnly` werden sowohl Office-COM als auch das Anheften per Shell-COM unterbunden.
 
 ### Excel-/CSV-Fallback
 

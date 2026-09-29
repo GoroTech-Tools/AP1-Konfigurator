@@ -66,15 +66,21 @@ def test_desktop_quick_access_function_is_integrated() -> None:
         re.IGNORECASE | re.MULTILINE,
     )
 
-    use_com_matches = re.finditer(r'if\s*\(\$UseCom\)\s*\{', script, re.IGNORECASE)
-    assert any(
-        re.search(
-            r'^\s*(?:try\s*\{\s*)?Add-DesktopToQuickAccess\b[^\r\n#]*-SortAlphabetically:\$SortAlphabetically\b[^\r\n#]*-SortDryRun:\$SortDryRun\b',
-            _extract_brace_block(script, match.start()),
-            re.IGNORECASE | re.MULTILINE,
-        )
-        for match in use_com_matches
+    start_match = re.search(r'function\s+Start-AP1Konfiguration\s*\{', script, re.IGNORECASE)
+    assert start_match is not None
+    start_body = _extract_brace_block(script, start_match.start())
+    assert re.search(r'\[switch\]\$SortAlphabetically', start_body, re.IGNORECASE)
+    assert re.search(r'\[switch\]\$SortDryRun', start_body, re.IGNORECASE)
+    registry_only_match = re.search(r'if\s*\(-not\s+\$RegistryOnly\)\s*\{', start_body, re.IGNORECASE)
+    assert registry_only_match is not None
+    pin_call = (
+        r'Add-DesktopToQuickAccess\b[^\r\n#]*'
+        r'-SortAlphabetically:\$SortAlphabetically\b[^\r\n#]*-SortDryRun:\$SortDryRun\b'
     )
+    assert re.search(pin_call, _extract_brace_block(start_body, registry_only_match.start()), re.IGNORECASE)
+    assert len(re.findall(pin_call, script, re.IGNORECASE)) == 1
+    assert re.search(r'SortAlphabetically\s*=\s*\$SortAlphabetically', script)
+    assert re.search(r'SortDryRun\s*=\s*\$SortDryRun', script)
 
 
 def test_quick_access_module_contains_sorting_and_stale_desktop_helpers() -> None:
