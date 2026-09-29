@@ -569,6 +569,17 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wPa
   }
 }
 
+function Restart-Explorer {
+  try {
+    Write-Info "Starte Windows-Explorer neu..."
+    Get-Process -Name explorer -ErrorAction SilentlyContinue |
+      Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Process -FilePath 'explorer.exe'
+  } catch {
+    Write-Warning "Windows-Explorer konnte nicht neu gestartet werden: $($_.Exception.Message)"
+  }
+}
+
 # ==================
 # Region: Hauptlauf
 # ==================
@@ -743,6 +754,7 @@ function Start-AP1Konfiguration {
               Write-SafeOutput "[DEBUG] Fehlerstelle: $($_.InvocationInfo.PositionMessage)" -ForegroundColor Red
         }
     } finally {
+          Restart-Explorer
           Write-Info "[DEBUG] Stop-PrepTranscript aufgerufen"
         Stop-PrepTranscript
     }
