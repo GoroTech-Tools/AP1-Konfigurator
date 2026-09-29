@@ -50,6 +50,18 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wPa
 		Write-Info "Taskbar-Refresh ohne Explorer-Neustart übersprungen: $($_.Exception.Message)"
 	}
 }
+
+function Restart-Explorer {
+	try {
+		Write-Info "Starte Windows-Explorer neu..."
+		Get-Process -Name explorer -ErrorAction SilentlyContinue |
+			Stop-Process -Force -ErrorAction SilentlyContinue
+		Start-Process -FilePath 'explorer.exe'
+	} catch {
+		Write-Warning "Windows-Explorer konnte nicht neu gestartet werden: $($_.Exception.Message)"
+	}
+}
+
 function Stop-NamedProcess {
 	param([string]$Name)
 	try { Get-Process -Name $Name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
@@ -109,4 +121,4 @@ function Test-ExpandArchive {
 	}
 }
 
-Export-ModuleMember -Function Stop-NamedProcess,Expand-ZipWithShell,Test-ExpandArchive,Set-Proxy,Set-TaskbarSettings
+Export-ModuleMember -Function Stop-NamedProcess,Expand-ZipWithShell,Test-ExpandArchive,Set-Proxy,Set-TaskbarSettings,Restart-Explorer
