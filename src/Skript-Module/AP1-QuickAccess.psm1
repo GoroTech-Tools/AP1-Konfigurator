@@ -65,15 +65,23 @@ function Invoke-PinToQuickAccessByPath {
         [string]$Path
     )
 
-    $parentPath = Split-Path -Path $Path -Parent
-    $leafName = Split-Path -Path $Path -Leaf
-
-    $parentFolder = $Shell.Namespace($parentPath)
-    if (-not $parentFolder) {
-        throw "Elternordner konnte nicht über Shell.Application geöffnet werden: $parentPath"
+    $item = $null
+    $targetFolder = $Shell.Namespace($Path)
+    if ($targetFolder) {
+        $item = $targetFolder.Self
     }
 
-    $item = $parentFolder.ParseName($leafName)
+    if (-not $item) {
+        $parentPath = Split-Path -Path $Path -Parent
+        $leafName = Split-Path -Path $Path -Leaf
+        $parentFolder = $Shell.Namespace($parentPath)
+        if (-not $parentFolder) {
+            throw "Elternordner konnte nicht über Shell.Application geöffnet werden: $parentPath"
+        }
+
+        $item = $parentFolder.ParseName($leafName)
+    }
+
     if (-not $item) {
         throw "Element konnte in der Shell nicht aufgelöst werden: $Path"
     }
@@ -84,6 +92,34 @@ function Invoke-PinToQuickAccessByPath {
     }
 
     $pinVerb.DoIt()
+}
+
+function Test-QuickAccessContainsPath {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Shell,
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $normalizedPath = Get-NormalizedPath -Path $Path
+    $quickAccessNamespace = $Shell.Namespace('shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}')
+    if (-not $quickAccessNamespace) {
+        return $false
+    }
+
+    foreach ($qaItem in @($quickAccessNamespace.Items())) {
+        try {
+            if (-not [string]::IsNullOrWhiteSpace($qaItem.Path) -and
+                (Get-NormalizedPath -Path $qaItem.Path) -eq $normalizedPath) {
+                return $true
+            }
+        } catch {
+            $null = $_.Exception.Message
+        }
+    }
+
+    return $false
 }
 
 function Get-QuickAccessFilesystemEntries {
@@ -309,24 +345,7 @@ function Add-DesktopToQuickAccess {
         Write-Host "$removedCount veraltete Desktop-Einträge wurden aus dem Schnellzugriff entfernt." -ForegroundColor Yellow
     }
 
-    $quickAccessNamespace = $shell.Namespace('shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}')
-    $desktopNormalized = Get-NormalizedPath -Path $desktopPath
-
-    $alreadyPinned = $false
-    if ($quickAccessNamespace) {
-        foreach ($qaItem in $quickAccessNamespace.Items()) {
-            try {
-                if (-not [string]::IsNullOrWhiteSpace($qaItem.Path)) {
-                    if ((Get-NormalizedPath -Path $qaItem.Path) -eq $desktopNormalized) {
-                        $alreadyPinned = $true
-                        break
-                    }
-                }
-            } catch {
-                $null = $_.Exception.Message
-            }
-        }
-    }
+    $alreadyPinned = Test-QuickAccessContainsPath -Shell $shell -Path $desktopPath
 
     if ($alreadyPinned -and -not $SortAlphabetically) {
         Write-Host "Der benutzerspezifische Desktop ist bereits im Schnellzugriff angeheftet." -ForegroundColor Green
@@ -340,8 +359,25 @@ function Add-DesktopToQuickAccess {
     }
 
     if (-not $alreadyPinned) {
-        Invoke-PinToQuickAccessByPath -Shell $shell -Path $desktopPath
-        Start-Sleep -Milliseconds 300
+        $pinVerified = $false
+        for ($attempt = 1; $attempt -le 3 -and -not $pinVerified; $attempt++) {
+            if ($attempt -gt 1) {
+                $shell = New-Object -ComObject Shell.Application
+            }
+
+            if (-not (Test-QuickAccessContainsPath -Shell $shell -Path $desktopPath)) {
+                Invoke-PinToQuickAccessByPath -Shell $shell -Path $desktopPath
+            }
+
+            Start-Sleep -Milliseconds (300 * $attempt)
+            $shell = New-Object -ComObject Shell.Application
+            $pinVerified = Test-QuickAccessContainsPath -Shell $shell -Path $desktopPath
+        }
+
+        if (-not $pinVerified) {
+            throw "Desktop konnte nach mehreren Versuchen nicht im Schnellzugriff verifiziert werden: $desktopPath"
+        }
+
         Write-Host "Desktop wurde erfolgreich an den Schnellzugriff angeheftet." -ForegroundColor Green
     }
 

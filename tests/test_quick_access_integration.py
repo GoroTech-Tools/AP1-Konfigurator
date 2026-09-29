@@ -84,6 +84,7 @@ def test_quick_access_module_contains_sorting_and_stale_desktop_helpers() -> Non
         'Get-NormalizedPath',
         'Get-ShellVerb',
         'Invoke-PinToQuickAccessByPath',
+        'Test-QuickAccessContainsPath',
         'Get-QuickAccessFilesystemEntries',
         'Test-StringSequenceEqual',
         'Reorder-QuickAccessAlphabetically',
@@ -94,3 +95,20 @@ def test_quick_access_module_contains_sorting_and_stale_desktop_helpers() -> Non
     assert 'pintohome' in module
     assert 'unpinfromhome' in module
     assert 'shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}' in module
+
+
+def test_quick_access_pinning_handles_redirects_and_verifies_without_explorer_restart() -> None:
+    module = (ROOT / 'src' / 'Skript-Module' / 'AP1-QuickAccess.psm1').read_text(encoding='utf-8')
+    function_match = re.search(r'function\s+Invoke-PinToQuickAccessByPath\s*\{', module, re.IGNORECASE)
+    assert function_match is not None
+    function_body = _extract_brace_block(module, function_match.start())
+    assert re.search(r'\.Namespace\(\$Path\)', function_body, re.IGNORECASE)
+    assert re.search(r'\.Self\b', function_body, re.IGNORECASE)
+
+    add_match = re.search(r'function\s+Add-DesktopToQuickAccess\s*\{', module, re.IGNORECASE)
+    assert add_match is not None
+    add_body = _extract_brace_block(module, add_match.start())
+    assert re.search(r'for\s*\(\$attempt\s*=\s*1;\s*\$attempt\s*-le\s*3', add_body, re.IGNORECASE)
+    assert 'Test-QuickAccessContainsPath' in add_body
+    assert 'New-Object -ComObject Shell.Application' in add_body
+    assert 'explorer.exe' not in add_body.lower()
