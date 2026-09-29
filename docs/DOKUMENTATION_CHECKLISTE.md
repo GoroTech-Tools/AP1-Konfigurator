@@ -1,6 +1,6 @@
 # DOKUMENTATION CHECKLISTE
 
-Aktueller Stand: **v1.0.42** · Letzte Aktualisierung: **28. September 2026**
+Aktueller Stand: **v1.0.43** · Letzte Aktualisierung: **29. September 2026**
 
 ## Vor dem Lauf
 
